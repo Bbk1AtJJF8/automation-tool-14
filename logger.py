@@ -1,23 +1,33 @@
 import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
 
-def setup_logger(log_file='app.log', max_bytes=5*1024*1024, backup_count=3):
-    logger = logging.getLogger(__name__)
-    logger.setLevel(logging.DEBUG)
-    
-    if not logger.handlers:
-        # Create directory if it doesn't exist
-        os.makedirs(os.path.dirname(log_file), exist_ok=True)
-        # Create a rotating file handler
-        handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+class CustomLogger:
+    def __init__(self, name):
+        self.logger = logging.getLogger(name)
+        handler = logging.StreamHandler(sys.stdout)
         formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
-        logger.addHandler(handler)
-    return logger
+        self.logger.addHandler(handler)
+        self.logger.setLevel(logging.INFO)
 
-# Example usage
-if __name__ == '__main__':
-    log = setup_logger('logs/application.log')
-    log.info('Logger is set up! Ready to log.')
-    log.error('This is an error message.')
+    def info(self, message):
+        self.logger.info(message)
+
+    def error(self, message):
+        self.logger.error(message)
+
+    def warning(self, message):
+        self.logger.warning(message)
+
+
+def validate_input(user_input):
+    if not isinstance(user_input, str):
+        raise ValueError('Input must be a string')
+    if len(user_input) < 1:
+        raise ValueError('Input cannot be empty')
+
+
+def main_loop():
+    logger = CustomLogger(__name__)
+    while True:
+        user_input = input('Enter something (type 
