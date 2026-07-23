@@ -1,34 +1,23 @@
 import logging
-import time
+from logging.handlers import RotatingFileHandler
+import os
 
-class PerformanceLogger:
-    def __init__(self, name):
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+def setup_logger(log_file='app.log', max_bytes=5*1024*1024, backup_count=3):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    
+    if not logger.handlers:
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(log_file), exist_ok=True)
+        # Create a rotating file handler
+        handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
-        self.logger.addHandler(handler)
-
-    def log_performance(self, func):
-        def wrapper(*args, **kwargs):
-            start_time = time.time()
-            result = func(*args, **kwargs)
-            end_time = time.time()
-            execution_time = end_time - start_time
-            self.logger.debug(f'Executed {func.__name__} in {execution_time:.4f} seconds')
-            return result
-        return wrapper
+        logger.addHandler(handler)
+    return logger
 
 # Example usage
 if __name__ == '__main__':
-    logger = PerformanceLogger(__name__)
-    
-    @logger.log_performance
-    def sample_function(n):
-        total = 0
-        for i in range(n):
-            total += i
-        return total
-    
-    sample_function(10000)
+    log = setup_logger('logs/application.log')
+    log.info('Logger is set up! Ready to log.')
+    log.error('This is an error message.')
