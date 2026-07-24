@@ -1,23 +1,27 @@
+import json
 import os
-from typing import Dict, Any
 
-def load_config(file_path: str) -> Dict[str, Any]:
-    """
-    Load configuration from a given file path.
+class ConfigLoader:
+    def __init__(self, default_config_path):
+        self.default_config_path = default_config_path
+        self.config = self.load_defaults()
 
-    Args:
-        file_path (str): The path to the configuration file.
+    def load_defaults(self):
+        with open(self.default_config_path) as f:
+            return json.load(f)
 
-    Returns:
-        Dict[str, Any]: A dictionary containing configuration settings.
-    """
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f'Configuration file not found: {file_path}')
-    with open(file_path, 'r') as file:
-        return {line.split('=')[0].strip(): line.split('=')[1].strip() for line in file if '=' in line}
+    def load_from_file(self, config_file):
+        if os.path.exists(config_file):
+            with open(config_file) as f:
+                user_config = json.load(f)
+            self.config.update(user_config)
+        else:
+            print(f'Warning: {config_file} not found. Using defaults.')
 
-CONFIG_PATH = os.getenv('CONFIG_PATH', 'default_config.ini')
-CONFIG = load_config(CONFIG_PATH)
+    def get(self, key, default=None):
+        return self.config.get(key, default)
 
-if __name__ == '__main__':
-    print(CONFIG)
+# Example usage:
+# default_config = ConfigLoader('default_config.json')
+# default_config.load_from_file('user_config.json')
+# print(default_config.get('some_key', 'default_value'))
