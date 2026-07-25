@@ -1,27 +1,23 @@
-import json
 import os
+import json
 
-class ConfigLoader:
-    def __init__(self, default_config_path):
-        self.default_config_path = default_config_path
-        self.config = self.load_defaults()
+def load_config(file_path):
+    if not os.path.isfile(file_path):
+        raise FileNotFoundError(f"Config file not found: {file_path}")
+    try:
+        with open(file_path, 'r') as config_file:
+            config = json.load(config_file)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Error decoding JSON: {str(e)}")
+    
+    if 'settings' not in config:
+        raise KeyError("'settings' key missing in config")
+    
+    return config['settings']
 
-    def load_defaults(self):
-        with open(self.default_config_path) as f:
-            return json.load(f)
-
-    def load_from_file(self, config_file):
-        if os.path.exists(config_file):
-            with open(config_file) as f:
-                user_config = json.load(f)
-            self.config.update(user_config)
-        else:
-            print(f'Warning: {config_file} not found. Using defaults.')
-
-    def get(self, key, default=None):
-        return self.config.get(key, default)
-
-# Example usage:
-# default_config = ConfigLoader('default_config.json')
-# default_config.load_from_file('user_config.json')
-# print(default_config.get('some_key', 'default_value'))
+if __name__ == '__main__':
+    try:
+        settings = load_config('config.json')
+        print('Loaded settings:', settings)
+    except Exception as e:
+        print(f'Failed to load config: {str(e)}')
