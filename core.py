@@ -1,42 +1,33 @@
-from typing import Any, Dict, Optional
+import time
+from functools import wraps
 
-class AutomationTool:
-    """
-    A class to represent an automation tool.
-    """
+class PerformanceOptimizer:
+    def __init__(self):
+        self.execution_times = []
 
-    def __init__(self, name: str, version: str) -> None:
-        """
-        Initialize an automation tool with a name and version.
-        
-        :param name: The name of the automation tool.
-        :param version: The version of the automation tool.
-        """
-        self.name = name
-        self.version = version
+    def log_time(self, func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            start_time = time.time()
+            result = func(*args, **kwargs)
+            end_time = time.time()
+            self.execution_times.append(end_time - start_time)
+            return result
+        return wrapper
 
-    def run(self, task: str, params: Optional[Dict[str, Any]] = None) -> str:
-        """
-        Execute a task with the given parameters if provided.
-        
-        :param task: The task to run.
-        :param params: A dictionary of parameters for the task.
-        :return: A string describing the result of the task execution.
-        """
-        if params is None:
-            params = {}
-        return f"Running {task} with parameters {params} on {self.name} v{self.version}"
+    def average_time(self):
+        if not self.execution_times:
+            return 0
+        return sum(self.execution_times) / len(self.execution_times)
 
-    def status(self) -> Dict[str, str]:
-        """
-        Get the status of the automation tool.
-        
-        :return: A dictionary containing the status of the tool.
-        """
-        return {"name": self.name, "version": self.version, "status": "active"}
+performance_optimizer = PerformanceOptimizer()
 
-# Example usage
-if __name__ == '__main__':
-    tool = AutomationTool(name='AutomationTool-14', version='1.0')
-    print(tool.run('example_task', { 'key': 'value' }))
-    print(tool.status())
+@performance_optimizer.log_time
+def sample_function(x):
+    time.sleep(x)
+    return x ** 2
+
+for i in range(1, 4):
+    print(sample_function(i))
+
+print(f"Average execution time: {performance_optimizer.average_time()} seconds")
