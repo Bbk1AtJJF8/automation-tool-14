@@ -1,41 +1,31 @@
-import os
 import json
-import logging
+from collections import defaultdict
+from typing import Any, Dict, List, Union
 
-def load_json(file_path):
-    """Load JSON data from a file."""
-    if not os.path.isfile(file_path):
-        logging.error(f"File '{file_path}' not found.")
-        return None
-    with open(file_path, 'r') as f:
-        try:
-            return json.load(f)
-        except json.JSONDecodeError as e:
-            logging.error(f"Error decoding JSON: {e}")
-            return None
-
-
-def save_json(data, file_path):
-    """Save data as JSON to a file."""
-    with open(file_path, 'w') as f:
-        json.dump(data, f, indent=4)
+def flatten_dict(nested_dict: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
+    items = []
+    for key, value in nested_dict.items():
+        new_key = f'{parent_key}{sep}{key}' if parent_key else key
+        if isinstance(value, dict):
+            items.extend(flatten_dict(value, new_key, sep=sep).items())
+        else:
+            items.append((new_key, value))
+    return dict(items)
 
 
-def get_file_extension(file_name):
-    """Return the file extension from a file name."""
-    return os.path.splitext(file_name)[1]
+def merge_dicts(dicts: List[Dict[str, Any]]) -> Dict[str, Any]:
+    merged = defaultdict(list)
+    for d in dicts:
+        for key, value in d.items():
+            merged[key].append(value)
+    return {k: v if len(v) > 1 else v[0] for k, v in merged.items()}
 
 
-def read_file_lines(file_path):
-    """Read all lines from a file and return as a list."""
-    if not os.path.isfile(file_path):
-        logging.error(f"File '{file_path}' not found.")
-        return []
-    with open(file_path, 'r') as f:
-        return f.readlines()
+def save_to_json(data: Union[Dict, List], filename: str) -> None:
+    with open(filename, 'w') as json_file:
+        json.dump(data, json_file, indent=4)
 
 
-def write_lines_to_file(lines, file_path):
-    """Write a list of lines to a file."""
-    with open(file_path, 'w') as f:
-        f.writelines(lines)
+def load_from_json(filename: str) -> Union[Dict, List]:
+    with open(filename, 'r') as json_file:
+        return json.load(json_file)
