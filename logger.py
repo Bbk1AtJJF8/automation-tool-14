@@ -1,37 +1,38 @@
 import logging
 
 class Logger:
-    """A simple logger class for logging messages at various levels."""
-
-    def __init__(self, name: str, level: int = logging.INFO) -> None:
-        """Initialize the logger with a given name and level."""
+    def __init__(self, name):
         self.logger = logging.getLogger(name)
-        self.logger.setLevel(level)
+        self.logger.setLevel(logging.DEBUG)
         handler = logging.StreamHandler()
         formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
         handler.setFormatter(formatter)
         self.logger.addHandler(handler)
 
-    def info(self, message: str) -> None:
-        """Log an info message."""
-        self.logger.info(message)
+    def log_info(self, message):
+        if self.validate_message(message):
+            self.logger.info(message)
 
-    def warning(self, message: str) -> None:
-        """Log a warning message."""
-        self.logger.warning(message)
+    def log_warning(self, message):
+        if self.validate_message(message):
+            self.logger.warning(message)
 
-    def error(self, message: str) -> None:
-        """Log an error message."""
-        self.logger.error(message)
+    def log_error(self, message):
+        if self.validate_message(message):
+            self.logger.error(message)
 
-    def critical(self, message: str) -> None:
-        """Log a critical message."""
-        self.logger.critical(message)
+    def validate_message(self, message):
+        if not isinstance(message, str):
+            self.logger.error('Invalid message type. Must be string.')
+            return False
+        if len(message) == 0:
+            self.logger.error('Message cannot be empty.')
+            return False
+        return True
 
 # Example usage:
 if __name__ == '__main__':
-    log = Logger(__name__)
-    log.info('This is an info message')
-    log.warning('This is a warning message')
-    log.error('This is an error message')
-    log.critical('This is a critical message')
+    logger = Logger('MyApp')
+    logger.log_info('This is an info message.')
+    logger.log_warning('This is a warning message.')
+    logger.log_error('This is an error message.')
