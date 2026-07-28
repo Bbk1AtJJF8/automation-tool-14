@@ -1,23 +1,34 @@
 import os
-import json
+import logging
+from logging.handlers import RotatingFileHandler
 
-def load_config(file_path):
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(f"Config file not found: {file_path}")
-    try:
-        with open(file_path, 'r') as config_file:
-            config = json.load(config_file)
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Error decoding JSON: {str(e)}")
-    
-    if 'settings' not in config:
-        raise KeyError("'settings' key missing in config")
-    
-    return config['settings']
+LOG_LEVEL = logging.DEBUG
+LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+LOG_FILE = 'app.log'
+
+# Create logger
+logger = logging.getLogger(__name__)
+logger.setLevel(LOG_LEVEL)
+
+# Create a file handler that logs even debug messages
+handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=2)
+handler.setLevel(LOG_LEVEL)
+
+# Create formatter and add it to the handler
+formatter = logging.Formatter(LOG_FORMAT)
+handler.setFormatter(formatter)
+
+# Add the handler to the logger
+logger.addHandler(handler)
+
+# Example function to demonstrate logging
+
+def log_example():
+    logger.debug('This is a debug message')
+    logger.info('This is an info message')
+    logger.warning('This is a warning message')
+    logger.error('This is an error message')
+    logger.critical('This is a critical message')
 
 if __name__ == '__main__':
-    try:
-        settings = load_config('config.json')
-        print('Loaded settings:', settings)
-    except Exception as e:
-        print(f'Failed to load config: {str(e)}')
+    log_example()
