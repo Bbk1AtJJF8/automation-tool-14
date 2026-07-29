@@ -1,36 +1,51 @@
 # Automation Tool 14
 
-Automation Tool 14 is a versatile Python-based application designed to streamline repetitive tasks and enhance your productivity. Whether it's web scraping, file manipulation, or data processing, this tool offers straightforward solutions to simplify your workflow.
+Automation Tool 14 is a versatile Python-based utility designed to simplify repetitive tasks in software development and system administration. With its user-friendly interface and powerful features, this tool can help you streamline your workflow and enhance productivity.
 
 ## Features
-
-- **Web Scraping**: Easily extract data from websites with customizable scraping options and built-in support for pagination.
-- **File Automation**: Automate common file operations, such as renaming, moving, and converting files based on user-defined rules.
-- **Data Processing**: Apply advanced data transformations using built-in functions, enabling efficient manipulation and analysis of large datasets.
-- **Easy Configuration**: Simplify task setup with a user-friendly configuration file that allows you to specify parameters without modifying the code.
+- **Task Scheduling**: Easily set up scheduled tasks to run scripts or commands at specified intervals using built-in cron-like functionality.
+- **API Integration**: Seamlessly connect to popular APIs, allowing you to automate data retrieval and processing from multiple sources effortlessly.
+- **File Management**: Automate file operations such as moving, renaming, and deleting files based on custom rules to keep your directories organized.
+- **Custom Scripts**: Extend the tool’s capabilities by writing your own Python scripts that can be executed within the tool, ensuring flexibility for unique automation needs.
 
 ## Installation
 
-To install Automation Tool 14, make sure you have Python 3.6 or higher installed. You can then clone the repository and install the required packages using pip:
+To install Automation Tool 14, clone the repository and install the required dependencies using pip:
 
 ```bash
-git clone https://github.com/yourusername/automation-tool-14.git
+git clone https://github.com/Developer/automation-tool-14.git
 cd automation-tool-14
 pip install -r requirements.txt
 ```
 
-## Basic Usage
+## Basic Usage Example
 
-Once installed, you can run the tool directly from the command line. Here's a basic example to demonstrate how to use the web scraping feature:
+Once installed, you can start using Automation Tool 14 right away. Below is a simple example that demonstrates how to schedule a Python script to run every hour.
+
+1. Create a new task by editing the configuration file:
 
 ```bash
-python main.py --action scrape --url "https://example.com/data" --output "output.csv"
+nano tasks.yaml
 ```
 
-This command will scrape data from the specified URL and save it to `output.csv`. For more options and detailed usage, refer to the documentation provided in the repository.
+2. Add the following YAML configuration to schedule a script:
 
----
+```yaml
+tasks:
+  - name: Run Data Cleanup
+    command: python cleanup.py
+    schedule: "0 * * * *"  # Every hour
+```
 
-![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)
+3. Start the automation tool:
 
-Feel free to contribute to the project by submitting issues or pull requests. Your feedback is vital for continued improvement and functionality enhancement.
+```bash
+python automation_tool.py
+```
+
+Now, your data cleanup script will run automatically every hour, allowing you to focus on more critical tasks!
+
+## License
+![MIT License](https://img.shields.io/badge/license-MIT-green)
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
