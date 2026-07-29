@@ -1,26 +1,33 @@
+import json
+import random
+import time
+
 def process_data(data):
     if not isinstance(data, list):
-        raise ValueError('Input must be a list')
-    return [item**2 for item in data if isinstance(item, (int, float))]
+        raise ValueError('Data should be a list')
+
+    results = []
+    for item in data:
+        try:
+            result = heavy_computation(item)
+            results.append(result)
+        except (TypeError, ValueError) as e:
+            print(f'Error processing item {item}: {e}')
+            results.append(None)
+    return results
 
 
-def filter_data(data, threshold):
-    if not isinstance(threshold, (int, float)):
-        raise ValueError('Threshold must be a number')
-    return [item for item in data if item >= threshold]
+def heavy_computation(value):
+    if value < 0:
+        raise ValueError('Value cannot be negative')
+    time.sleep(random.uniform(0.1, 0.5))  # Simulate heavy processing
+    return value ** 2
 
 
-def compute_statistics(data):
-    if not data:
-        return {'mean': 0, 'count': 0, 'sum': 0}
-    total = sum(data)
-    count = len(data)
-    mean = total / count
-    return {'mean': mean, 'count': count, 'sum': total}
+def main():
+    sample_data = [1, 2, -3, 'a', 4]  # Mixed types and a negative number
+    processed = process_data(sample_data)
+    print('Processed results:', json.dumps(processed, indent=2))
 
-
-def display_results(results):
-    if not isinstance(results, dict):
-        raise ValueError('Results must be a dictionary')
-    for key, value in results.items():
-        print(f'{key.capitalize()}: {value}')
+if __name__ == '__main__':
+    main()
