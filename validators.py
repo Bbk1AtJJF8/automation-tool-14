@@ -1,30 +1,24 @@
 import re
 
-class DataValidator:
-    @staticmethod
-    def is_email_valid(email):
-        regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        return re.match(regex, email) is not None
-    
-    @staticmethod
-    def is_phone_number_valid(phone):
-        regex = r'^(?:\+?\d{1,3})?\s?\d{10}$'
-        return re.match(regex, phone) is not None
-    
-    @staticmethod
-    def is_username_valid(username):
-        regex = r'^[a-zA-Z0-9_]{3,16}$'
-        return re.match(regex, username) is not None
-    
-    @staticmethod
-    def is_password_valid(password):
-        return len(password) >= 8 and any(char.isdigit() for char in password) and any(char.isupper() for char in password)
-    
-    @staticmethod
-    def validate_user_data(email, phone, username, password):
-        return (
-            DataValidator.is_email_valid(email) and
-            DataValidator.is_phone_number_valid(phone) and
-            DataValidator.is_username_valid(username) and
-            DataValidator.is_password_valid(password)
-        )
+class Validator:
+    def __init__(self):
+        self.patterns = {
+            'email': re.compile(r'^[\w\.-]+@[\w\.-]+\.\w+$'),
+            'url': re.compile(r'^(http|https)://[\w.-]+(\.[\w.-]+)+[/\w .-]*?$'),
+            'phone': re.compile(r'^(\+?\d{1,3}[- ]?)?\(?\d{1,4}\)?[- ]?\d{1,4}[- ]?\d{1,9}$')
+        }
+
+    def validate(self, value, type_):
+        if type_ not in self.patterns:
+            raise ValueError(f'Unknown validation type: {type_}')
+        return bool(self.patterns[type_].match(value))
+
+    def validate_multiple(self, values, type_):
+        return {value: self.validate(value, type_) for value in values}
+
+# Usage example:
+if __name__ == '__main__':
+    validator = Validator()
+    emails = ['test@example.com', 'invalid-email']
+    results = validator.validate_multiple(emails, 'email')
+    print(results)  # Output: {'test@example.com': True, 'invalid-email': False}
