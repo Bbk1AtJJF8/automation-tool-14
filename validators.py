@@ -1,34 +1,30 @@
 import re
 
-class Validator:
+class DataValidator:
     @staticmethod
     def is_email_valid(email):
-        email_regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-        return re.match(email_regex, email) is not None
-
+        regex = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+        return re.match(regex, email) is not None
+    
     @staticmethod
-    def is_phone_number_valid(phone_number):
-        phone_number_regex = r'^\+?1?\d{9,15}$'
-        return re.match(phone_number_regex, phone_number) is not None
-
+    def is_phone_number_valid(phone):
+        regex = r'^(?:\+?\d{1,3})?\s?\d{10}$'
+        return re.match(regex, phone) is not None
+    
     @staticmethod
     def is_username_valid(username):
-        username_regex = r'^[a-zA-Z0-9]{3,20}$'
-        return re.match(username_regex, username) is not None
-
+        regex = r'^[a-zA-Z0-9_]{3,16}$'
+        return re.match(regex, username) is not None
+    
     @staticmethod
-    def is_password_strong(password):
-        has_upper = re.search(r'[A-Z]', password)
-        has_lower = re.search(r'[a-z]', password)
-        has_digit = re.search(r'\d', password)
-        has_special = re.search(r'[^A-Za-z0-9]', password)
-        return (len(password) >= 8 and has_upper and has_lower and has_digit and has_special) is not None
-
+    def is_password_valid(password):
+        return len(password) >= 8 and any(char.isdigit() for char in password) and any(char.isupper() for char in password)
+    
     @staticmethod
-    def validate(data):
-        return {
-            'email': Validator.is_email_valid(data.get('email', '')),
-            'phone_number': Validator.is_phone_number_valid(data.get('phone_number', '')),
-            'username': Validator.is_username_valid(data.get('username', '')),
-            'password': Validator.is_password_strong(data.get('password', ''))
-        }
+    def validate_user_data(email, phone, username, password):
+        return (
+            DataValidator.is_email_valid(email) and
+            DataValidator.is_phone_number_valid(phone) and
+            DataValidator.is_username_valid(username) and
+            DataValidator.is_password_valid(password)
+        )
