@@ -1,34 +1,33 @@
+import json
 import os
-import logging
-from logging.handlers import RotatingFileHandler
 
-LOG_LEVEL = logging.DEBUG
-LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-LOG_FILE = 'app.log'
+class ConfigurationLoader:
+    def __init__(self, default_config):
+        self.default_config = default_config
+        self.config = default_config.copy()
 
-# Create logger
-logger = logging.getLogger(__name__)
-logger.setLevel(LOG_LEVEL)
+    def load(self, filename):
+        if os.path.exists(filename):
+            with open(filename, 'r') as file:
+                file_config = json.load(file)
+                self.config = self.merge_configs(self.default_config, file_config)
 
-# Create a file handler that logs even debug messages
-handler = RotatingFileHandler(LOG_FILE, maxBytes=5 * 1024 * 1024, backupCount=2)
-handler.setLevel(LOG_LEVEL)
+    def merge_configs(self, default, user):
+        merged = default.copy()
+        merged.update(user)
+        return merged
 
-# Create formatter and add it to the handler
-formatter = logging.Formatter(LOG_FORMAT)
-handler.setFormatter(formatter)
-
-# Add the handler to the logger
-logger.addHandler(handler)
-
-# Example function to demonstrate logging
-
-def log_example():
-    logger.debug('This is a debug message')
-    logger.info('This is an info message')
-    logger.warning('This is a warning message')
-    logger.error('This is an error message')
-    logger.critical('This is a critical message')
+    def get(self, key, default=None):
+        return self.config.get(key, default)
 
 if __name__ == '__main__':
-    log_example()
+    defaults = {
+        'host': 'localhost',
+        'port': 8080,
+        'debug': False,
+    }
+    loader = ConfigurationLoader(defaults)
+    loader.load('config.json')
+    print(loader.get('host'))
+    print(loader.get('port'))
+    print(loader.get('non_existent_key', 'default_value'))
