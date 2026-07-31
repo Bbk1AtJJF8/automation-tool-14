@@ -1,33 +1,32 @@
-import json
-import random
 import time
+import requests
 
-def process_data(data):
-    if not isinstance(data, list):
-        raise ValueError('Data should be a list')
+class NetworkError(Exception):
+    pass
 
-    results = []
-    for item in data:
-        try:
-            result = heavy_computation(item)
-            results.append(result)
-        except (TypeError, ValueError) as e:
-            print(f'Error processing item {item}: {e}')
-            results.append(None)
-    return results
+class NetworkClient:
+    def __init__(self, max_retries=3, backoff_factor=1):
+        self.max_retries = max_retries
+        self.backoff_factor = backoff_factor
 
-
-def heavy_computation(value):
-    if value < 0:
-        raise ValueError('Value cannot be negative')
-    time.sleep(random.uniform(0.1, 0.5))  # Simulate heavy processing
-    return value ** 2
-
-
-def main():
-    sample_data = [1, 2, -3, 'a', 4]  # Mixed types and a negative number
-    processed = process_data(sample_data)
-    print('Processed results:', json.dumps(processed, indent=2))
+    def get(self, url):
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                response = requests.get(url)
+                response.raise_for_status()  # Raise an error for bad responses
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                retries += 1
+                if retries == self.max_retries:
+                    raise NetworkError(f'Failed to fetch data from {url} after {retries} attempts') from e
+                wait_time = self.backoff_factor * (2 ** retries)
+                time.sleep(wait_time)  # Exponential backoff
 
 if __name__ == '__main__':
-    main()
+    client = NetworkClient()
+    try:
+        data = client.get('https://api.example.com/data')
+        print(data)
+    except NetworkError as e:
+        print(str(e))
