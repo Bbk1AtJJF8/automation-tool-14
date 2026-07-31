@@ -1,31 +1,35 @@
 import json
-from collections import defaultdict
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, Union
 
-def flatten_dict(nested_dict: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
-    items = []
-    for key, value in nested_dict.items():
-        new_key = f'{parent_key}{sep}{key}' if parent_key else key
-        if isinstance(value, dict):
-            items.extend(flatten_dict(value, new_key, sep=sep).items())
-        else:
-            items.append((new_key, value))
-    return dict(items)
+class CustomError(Exception):
+    pass
 
+def safe_load_json(json_string: str) -> Union[Dict[str, Any], str]:
+    try:
+        return json.loads(json_string)
+    except json.JSONDecodeError:
+        return 'Invalid JSON format.'
+    except TypeError:
+        return 'Input must be a string.'
 
-def merge_dicts(dicts: List[Dict[str, Any]]) -> Dict[str, Any]:
-    merged = defaultdict(list)
-    for d in dicts:
-        for key, value in d.items():
-            merged[key].append(value)
-    return {k: v if len(v) > 1 else v[0] for k, v in merged.items()}
+def generate_json_response(data: Any, success: bool = True) -> str:
+    response = {
+        'success': success,
+        'data': data if success else None,
+        'error': None if success else 'An error occurred.'
+    }
+    return json.dumps(response)
 
+def divide_numbers(numerator: float, denominator: float) -> Union[float, str]:
+    try:
+        return numerator / denominator
+    except ZeroDivisionError:
+        return 'Cannot divide by zero.'
+    except TypeError:
+        return 'Both arguments must be numbers.'
 
-def save_to_json(data: Union[Dict, List], filename: str) -> None:
-    with open(filename, 'w') as json_file:
-        json.dump(data, json_file, indent=4)
-
-
-def load_from_json(filename: str) -> Union[Dict, List]:
-    with open(filename, 'r') as json_file:
-        return json.load(json_file)
+def safe_execute(func: Any, *args: Any, **kwargs: Any) -> Union[Any, str]:
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        return f'Error: {str(e)}'
