@@ -1,28 +1,20 @@
-import json
+import re
 
-def read_json(file_path):
-    with open(file_path, 'r') as file:
-        return json.load(file)
+def validate_input(data):
+    if not isinstance(data, dict):
+        raise ValueError('Input must be a dictionary')
+    for key, value in data.items():
+        if not isinstance(key, str):
+            raise ValueError('Keys must be strings')
+        if not isinstance(value, (int, float, str)):
+            raise ValueError('Values must be int, float or str')
+        if isinstance(value, str) and not re.match('^[a-zA-Z0-9_]+$', value):
+            raise ValueError('String values must be alphanumeric')
 
-
-def write_json(data, file_path):
-    with open(file_path, 'w') as file:
-        json.dump(data, file, indent=4)
-
-
-def flatten_list(nested_list):
-    return [item for sublist in nested_list for item in sublist]
-
-
-def generate_range(start, end):
-    return list(range(start, end + 1))
-
-
-def merge_dictionaries(dict1, dict2):
-    merged = dict1.copy()
-    merged.update(dict2)
-    return merged
-
-
-def extract_keys(source_dict, keys):
-    return {key: source_dict[key] for key in keys if key in source_dict}
+if __name__ == '__main__':
+    sample_data = {'name': 'JohnDoe', 'age': 30, 'score': 88.5}
+    try:
+        validate_input(sample_data)
+        print('Input is valid')
+    except ValueError as e:
+        print(f'Error: {e}')
