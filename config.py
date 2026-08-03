@@ -1,33 +1,32 @@
 import json
 import os
 
-class ConfigurationLoader:
+class ConfigLoader:
     def __init__(self, default_config):
         self.default_config = default_config
-        self.config = default_config.copy()
+        self.user_config = {}
 
-    def load(self, filename):
-        if os.path.exists(filename):
-            with open(filename, 'r') as file:
-                file_config = json.load(file)
-                self.config = self.merge_configs(self.default_config, file_config)
+    def load(self, config_file):
+        if os.path.exists(config_file):
+            with open(config_file, 'r') as file:
+                self.user_config = json.load(file)
+        else:
+            self.user_config = {}
 
-    def merge_configs(self, default, user):
-        merged = default.copy()
-        merged.update(user)
-        return merged
+    def get(self, key):
+        return self.user_config.get(key, self.default_config.get(key))
 
-    def get(self, key, default=None):
-        return self.config.get(key, default)
+    def get_all(self):
+        config = self.default_config.copy()
+        config.update(self.user_config)
+        return config
 
+# Example usage
 if __name__ == '__main__':
-    defaults = {
-        'host': 'localhost',
-        'port': 8080,
-        'debug': False,
+    default_config = {
+        'setting1': 'default_value1',
+        'setting2': 'default_value2'
     }
-    loader = ConfigurationLoader(defaults)
-    loader.load('config.json')
-    print(loader.get('host'))
-    print(loader.get('port'))
-    print(loader.get('non_existent_key', 'default_value'))
+    loader = ConfigLoader(default_config)
+    loader.load('user_config.json')
+    print(loader.get_all())
