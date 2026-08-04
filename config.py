@@ -1,32 +1,25 @@
 import json
-import os
+from collections import defaultdict
 
 class ConfigLoader:
     def __init__(self, default_config):
         self.default_config = default_config
-        self.user_config = {}
+        self.user_config = defaultdict(lambda: None)
 
-    def load(self, config_file):
-        if os.path.exists(config_file):
-            with open(config_file, 'r') as file:
-                self.user_config = json.load(file)
-        else:
-            self.user_config = {}
+    def load_config(self, config_file):
+        try:
+            with open(config_file, 'r') as f:
+                user_config = json.load(f)
+                self.user_config.update(user_config)
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f'Error loading config: {e}')
 
-    def get(self, key):
+    def get_config(self, key):
         return self.user_config.get(key, self.default_config.get(key))
 
-    def get_all(self):
-        config = self.default_config.copy()
-        config.update(self.user_config)
-        return config
-
-# Example usage
 if __name__ == '__main__':
-    default_config = {
-        'setting1': 'default_value1',
-        'setting2': 'default_value2'
-    }
-    loader = ConfigLoader(default_config)
-    loader.load('user_config.json')
-    print(loader.get_all())
+    defaults = {'host': 'localhost', 'port': 8080, 'debug': False}
+    config_loader = ConfigLoader(defaults)
+    config_loader.load_config('settings.json')
+    print(config_loader.get_config('host'))  # Example usage
+    print(config_loader.get_config('port'))  # Example usage
