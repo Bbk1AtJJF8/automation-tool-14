@@ -1,33 +1,28 @@
-CLASS_CONSTANTS = {
-    'MAX_RETRIES': 5,
-    'TIMEOUT_SECONDS': 30,
-    'API_URL': 'https://api.example.com/',
-}
+import os
 
-ERROR_MESSAGES = {
-    'NETWORK_ERROR': 'There was a network error.',
-    'TIMEOUT_ERROR': 'The request timed out.',
-    'INVALID_INPUT': 'The input provided is invalid.',
-}
+class Constants:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    LOG_LEVEL = 'DEBUG'
+    TIMEOUT = 30
 
-SUCCESS_MESSAGES = {
-    'UPDATE_SUCCESS': 'The data was successfully updated.',
-    'DELETE_SUCCESS': 'The item was deleted successfully.',
-}
+    @staticmethod
+    def get_database_uri(db_name):
+        return f'mysql://user:password@localhost/{db_name}'
 
-DEFAULT_SETTINGS = {
-    'LANGUAGE': 'en',
-    'THEME': 'light',
-}
+    @staticmethod
+    def get_api_url(service):
+        return f'https://api.example.com/{service}'
 
-def get_constant(key):
-    return CLASS_CONSTANTS.get(key, 'Unknown key')
+    @staticmethod
+    def get_cache_key(user_id):
+        return f'user_cache_{user_id}'
 
-def get_error_message(key):
-    return ERROR_MESSAGES.get(key, 'Unknown error')
+    @staticmethod
+    def get_full_path(*args):
+        return os.path.join(Constants.BASE_DIR, *args)
 
-def get_success_message(key):
-    return SUCCESS_MESSAGES.get(key, 'Unknown success message')
+DEBUG_MODE = True if os.getenv('DEBUG') == '1' else False
 
-def get_default_setting(key):
-    return DEFAULT_SETTINGS.get(key, 'Unknown setting')
+if DEBUG_MODE:
+    print('Debug mode is enabled')
+
