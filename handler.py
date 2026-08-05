@@ -1,39 +1,36 @@
 import json
-import logging
 
-class CustomError(Exception):
-    pass
+class DataHandler:
+    def __init__(self, data):
+        self.data = data
 
-class ErrorHandler:
-    def __init__(self):
-        self.logger = logging.getLogger(__name__)
-        logging.basicConfig(level=logging.ERROR)
+    def to_json(self):
+        return json.dumps(self.data)
 
-    def handle_error(self, error):
-        if isinstance(error, CustomError):
-            self.logger.error(f'CustomError occurred: {error}')
-            return {'status': 'error', 'message': str(error)}
-        elif isinstance(error, ValueError):
-            self.logger.error('ValueError: Invalid value provided')
-            return {'status': 'error', 'message': 'Invalid value'}
-        elif isinstance(error, KeyError):
-            self.logger.error('KeyError: Key not found')
-            return {'status': 'error', 'message': 'Key not found'}
-        else:
-            self.logger.error(f'Unknown error: {error}')
-            return {'status': 'error', 'message': 'An unknown error occurred'}
+    def from_json(self, json_str):
+        self.data = json.loads(json_str)
 
-    def process_request(self, request):
-        try:
-            # Simulate processing logic  
-            if request.get('action') is None:
-                raise CustomError('Action cannot be None')
-            # Further processing code goes here
-            return {'status': 'success', 'data': 'Processed successfully'}
-        except Exception as e:
-            return self.handle_error(e)
+    def filter_keys(self, keys):
+        return {key: self.data[key] for key in keys if key in self.data}
 
+    def merge_data(self, new_data):
+        if isinstance(new_data, dict):
+            self.data.update(new_data)
+
+    def get_nested_value(self, key_path):
+        keys = key_path.split('.');
+        value = self.data
+        for key in keys:
+            value = value.get(key, None)
+            if value is None:
+                break
+        return value
+
+# Example usage
 if __name__ == '__main__':
-    handler = ErrorHandler()
-    response = handler.process_request({'action': None})
-    print(json.dumps(response))
+    sample_data = {'user': {'name': 'Alice', 'age': 30}, 'active': True}
+    handler = DataHandler(sample_data)
+    print(handler.to_json())
+    handler.merge_data({'user': {'city': 'Wonderland'}})
+    print(handler.get_nested_value('user.city'))
+    print(handler.filter_keys(['user', 'active']))
