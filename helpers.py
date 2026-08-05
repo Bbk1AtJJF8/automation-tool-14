@@ -1,20 +1,36 @@
-import re
+import json
+import logging
+from typing import Any, Dict, Union
 
-def validate_input(data):
-    if not isinstance(data, dict):
-        raise ValueError('Input must be a dictionary')
-    for key, value in data.items():
-        if not isinstance(key, str):
-            raise ValueError('Keys must be strings')
-        if not isinstance(value, (int, float, str)):
-            raise ValueError('Values must be int, float or str')
-        if isinstance(value, str) and not re.match('^[a-zA-Z0-9_]+$', value):
-            raise ValueError('String values must be alphanumeric')
+class CustomError(Exception):
+    pass
 
-if __name__ == '__main__':
-    sample_data = {'name': 'JohnDoe', 'age': 30, 'score': 88.5}
+def safe_json_loads(data: str) -> Union[Dict[str, Any], None]:
     try:
-        validate_input(sample_data)
-        print('Input is valid')
-    except ValueError as e:
-        print(f'Error: {e}')
+        return json.loads(data)
+    except json.JSONDecodeError as e:
+        logging.error(f'JSON decoding error: {e}')
+        return None
+    except Exception as e:
+        logging.error(f'Unexpected error during JSON parsing: {e}')
+        return None
+
+def divide_numbers(numerator: float, denominator: float) -> float:
+    try:
+        if denominator == 0:
+            raise CustomError('Denominator cannot be zero.')
+        return numerator / denominator
+    except CustomError as e:
+        logging.error(e)
+        return float('inf')  # Return infinity on error
+    except Exception as e:
+        logging.error(f'Unexpected error during division: {e}')
+        return float('inf')
+
+def safe_get(data: Dict[str, Any], key: str, default: Any = None) -> Any:
+    try:
+        return data.get(key, default)
+    except Exception as e:
+        logging.error(f'Error accessing key {key}: {e}')
+        return default
+
