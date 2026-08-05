@@ -5,32 +5,25 @@ class DataHandler:
         self.data = data
 
     def to_json(self):
-        return json.dumps(self.data)
+        return json.dumps(self.data, default=str)
 
-    def from_json(self, json_str):
-        self.data = json.loads(json_str)
+    def from_json(self, json_string):
+        self.data = json.loads(json_string)
+        return self.data
 
-    def filter_keys(self, keys):
-        return {key: self.data[key] for key in keys if key in self.data}
+    def filter_data(self, condition):
+        if not callable(condition):
+            raise ValueError('Condition must be a callable')
+        return [item for item in self.data if condition(item)]
 
-    def merge_data(self, new_data):
-        if isinstance(new_data, dict):
-            self.data.update(new_data)
+    def save_to_file(self, filename):
+        with open(filename, 'w') as f:
+            f.write(self.to_json())
 
-    def get_nested_value(self, key_path):
-        keys = key_path.split('.');
-        value = self.data
-        for key in keys:
-            value = value.get(key, None)
-            if value is None:
-                break
-        return value
+    def load_from_file(self, filename):
+        with open(filename, 'r') as f:
+            self.from_json(f.read())
 
-# Example usage
-if __name__ == '__main__':
-    sample_data = {'user': {'name': 'Alice', 'age': 30}, 'active': True}
-    handler = DataHandler(sample_data)
-    print(handler.to_json())
-    handler.merge_data({'user': {'city': 'Wonderland'}})
-    print(handler.get_nested_value('user.city'))
-    print(handler.filter_keys(['user', 'active']))
+# Example usage 
+# handler = DataHandler([1, 2, 3])
+# handler.save_to_file('data.json')
