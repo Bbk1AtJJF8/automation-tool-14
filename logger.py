@@ -1,20 +1,37 @@
 import logging
-from logging.handlers import RotatingFileHandler
 
-def setup_logger(log_file='app.log', max_bytes=5*1024*1024, backup_count=2):
-    logger = logging.getLogger('MyLogger')
-    logger.setLevel(logging.DEBUG)
-    handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+# Set up logging configuration
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def log_info(message):
+    logging.info(message)
+
+
+def log_warning(message):
+    logging.warning(message)
+
+
+def log_error(message):
+    logging.error(message)
+
+
+def log_debug(message):
+    logging.debug(message)
+
+
+def log_exception(exc):
+    logging.exception('An exception occurred: %s', exc)
+
+
+def setup_logger(name):
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     handler.setFormatter(formatter)
     logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
     return logger
 
-# Example usage in main script
+
 if __name__ == '__main__':
-    log = setup_logger()
-    log.debug('Debug message')
-    log.info('Info message')
-    log.warning('Warning message')
-    log.error('Error message')
-    log.critical('Critical message')
+    log_info('Logging system initialized.')
