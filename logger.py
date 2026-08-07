@@ -1,37 +1,24 @@
 import logging
+import os
+from logging.handlers import TimedRotatingFileHandler
 
-# Set up logging configuration
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-def log_info(message):
-    logging.info(message)
-
-
-def log_warning(message):
-    logging.warning(message)
-
-
-def log_error(message):
-    logging.error(message)
-
-
-def log_debug(message):
-    logging.debug(message)
-
-
-def log_exception(exc):
-    logging.exception('An exception occurred: %s', exc)
-
-
-def setup_logger(name):
-    logger = logging.getLogger(name)
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
+def setup_logger(log_file='app.log', level=logging.INFO):
+    logger = logging.getLogger('RotatingLogger')
+    logger.setLevel(level)
+    # Create a directory for logs if it doesn't exist
+    if not os.path.exists('logs'):
+        os.makedirs('logs')
+    
+    # Create a timed rotating file handler
+    handler = TimedRotatingFileHandler(os.path.join('logs', log_file),
+                                       when='midnight',
+                                       interval=1,
+                                       backupCount=7)
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
     logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
     return logger
 
-
+# Example usage
 if __name__ == '__main__':
-    log_info('Logging system initialized.')
+    logger = setup_logger()
+    logger.info('Logger is set up and ready to use.')
