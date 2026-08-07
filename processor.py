@@ -1,32 +1,27 @@
 import time
-import requests
+from functools import lru_cache
 
-class NetworkError(Exception):
-    pass
+@lru_cache(maxsize=128)
+def compute_heavy_operation(data):
+    time.sleep(2)  # Simulate a heavy computation
+    return sum(data)
 
-class NetworkClient:
-    def __init__(self, max_retries=3, backoff_factor=1):
-        self.max_retries = max_retries
-        self.backoff_factor = backoff_factor
+class DataProcessor:
+    def __init__(self, data):
+        self.data = data
 
-    def get(self, url):
-        retries = 0
-        while retries < self.max_retries:
-            try:
-                response = requests.get(url)
-                response.raise_for_status()  # Raise an error for bad responses
-                return response.json()
-            except requests.exceptions.RequestException as e:
-                retries += 1
-                if retries == self.max_retries:
-                    raise NetworkError(f'Failed to fetch data from {url} after {retries} attempts') from e
-                wait_time = self.backoff_factor * (2 ** retries)
-                time.sleep(wait_time)  # Exponential backoff
+    def process_data(self):
+        results = []
+        for chunk in self.data:
+            result = compute_heavy_operation(tuple(chunk))
+            results.append(result)
+        return results
 
 if __name__ == '__main__':
-    client = NetworkClient()
-    try:
-        data = client.get('https://api.example.com/data')
-        print(data)
-    except NetworkError as e:
-        print(str(e))
+    data_chunks = [range(1000), range(1000)] * 5  # Sample data
+    processor = DataProcessor(data_chunks)
+    start_time = time.time()
+    results = processor.process_data()
+    end_time = time.time()
+    print(f'Processed results: {results}')
+    print(f'Time taken: {end_time - start_time} seconds')
