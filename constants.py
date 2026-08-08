@@ -1,28 +1,32 @@
-import os
+from typing import Final, List, Tuple
 
-class Constants:
-    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-    LOG_LEVEL = 'DEBUG'
-    TIMEOUT = 30
+# Constants for application configuration
 
-    @staticmethod
-    def get_database_uri(db_name):
-        return f'mysql://user:password@localhost/{db_name}'
+BASE_URL: Final[str] = "https://api.example.com/"
 
-    @staticmethod
-    def get_api_url(service):
-        return f'https://api.example.com/{service}'
+# API endpoints
+API_ENDPOINTS: Final[Tuple[str, str]] = (
+    "get_items",
+    "create_item",
+)
 
-    @staticmethod
-    def get_cache_key(user_id):
-        return f'user_cache_{user_id}'
+# Status codes
+class HttpStatus:
+    SUCCESS: Final[int] = 200
+    CREATED: Final[int] = 201
+    NOT_FOUND: Final[int] = 404
+    SERVER_ERROR: Final[int] = 500
 
-    @staticmethod
-    def get_full_path(*args):
-        return os.path.join(Constants.BASE_DIR, *args)
+# Default pagination settings
+DEFAULT_PAGE_SIZE: Final[int] = 20
+DEFAULT_SORT_ORDER: Final[str] = "asc"
 
-DEBUG_MODE = True if os.getenv('DEBUG') == '1' else False
+# List of supported file formats
+SUPPORTED_FORMATS: Final[List[str]] = ["json", "xml", "csv"]
 
-if DEBUG_MODE:
-    print('Debug mode is enabled')
+# Application settings
+class AppSettings:
+    MAX_CONNECTIONS: Final[int] = 10
+    TIMEOUT: Final[int] = 30  # in seconds
+    RETRY_ATTEMPTS: Final[int] = 3
 
