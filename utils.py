@@ -1,27 +1,49 @@
-import json
-import os
-from datetime import datetime
+import logging
 
-def read_json(file_path):
-    if not os.path.exists(file_path):
-        raise FileNotFoundError(f"{file_path} does not exist")
-    with open(file_path, 'r') as file:
-        return json.load(file)
+class CustomError(Exception):
+    pass
 
 
-def write_json(data, file_path):
-    with open(file_path, 'w') as file:
-        json.dump(data, file, indent=4)
+def safe_divide(x, y):
+    try:
+        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
+            raise TypeError('Operands must be numbers')
+        if y == 0:
+            raise ZeroDivisionError('Division by zero')
+        return x / y
+    except (TypeError, ZeroDivisionError) as e:
+        logging.error(f'Error: {e}')
+        return None
 
 
-def current_timestamp():
-    return datetime.now().isoformat()
+def read_file(filepath):
+    try:
+        with open(filepath, 'r') as file:
+            return file.read()
+    except FileNotFoundError:
+        logging.error(f'File not found: {filepath}')
+        return None
+    except IOError as e:
+        logging.error(f'IO error occurred: {e}')
+        return None
 
 
-def flatten_list(nested_list):
-    return [item for sublist in nested_list for item in sublist]
+def process_data(data):
+    if not isinstance(data, list):
+        logging.error('Data must be a list')
+        return None
+    processed = []
+    for item in data:
+        if not isinstance(item, dict):
+            logging.warning(f'Skipping item, not a dict: {item}')
+            continue
+        processed.append(item)
+    return processed
 
 
-def unique_items(seq):
-    seen = set()
-    return [x for x in seq if not (x in seen or seen.add(x))]
+def safe_execute(func, *args, **kwargs):
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        logging.error(f'An error occurred: {e}')
+        return None
