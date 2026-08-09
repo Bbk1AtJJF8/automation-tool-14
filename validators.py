@@ -1,25 +1,28 @@
 import re
 
-class Validator:
-    def __init__(self):
-        self.email_pattern = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
-        self.phone_pattern = re.compile(r'^\+?1?\d{10,15}$')
+class ValidationError(Exception):
+    pass
 
-    def is_valid_email(self, email: str) -> bool:
-        return bool(self.email_pattern.match(email))
+class InputValidator:
+    def validate_email(self, email):
+        if not isinstance(email, str):
+            raise ValidationError("Email must be a string")
+        if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            raise ValidationError("Invalid email format")
+        return True
 
-    def is_valid_phone(self, phone: str) -> bool:
-        return bool(self.phone_pattern.match(phone))
+    def validate_age(self, age):
+        if not isinstance(age, int):
+            raise ValidationError("Age must be an integer")
+        if age < 0:
+            raise ValidationError("Age cannot be negative")
+        return True
 
-    def validate(self, email: str, phone: str) -> dict:
-        return {
-            'email': self.is_valid_email(email),
-            'phone': self.is_valid_phone(phone)
-        }
-
-if __name__ == '__main__':
-    validator = Validator()  
-    test_email = 'test@example.com'
-    test_phone = '+1234567890'
-    print(validator.validate(test_email, test_phone))
-    # Example outputs the validity of the test inputs
+    def validate_username(self, username):
+        if not isinstance(username, str):
+            raise ValidationError("Username must be a string")
+        if len(username) < 3 or len(username) > 20:
+            raise ValidationError("Username must be between 3 and 20 characters")
+        if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            raise ValidationError("Username can only contain letters, numbers, and underscores")
+        return True
