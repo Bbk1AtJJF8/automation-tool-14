@@ -1,36 +1,26 @@
-import json
-import logging
-from typing import Any, Dict, Union
+import time
+import requests
 
-class CustomError(Exception):
+class NetworkError(Exception):
     pass
 
-def safe_json_loads(data: str) -> Union[Dict[str, Any], None]:
-    try:
-        return json.loads(data)
-    except json.JSONDecodeError as e:
-        logging.error(f'JSON decoding error: {e}')
-        return None
-    except Exception as e:
-        logging.error(f'Unexpected error during JSON parsing: {e}')
-        return None
+def retry_request(url, retries=3, backoff_factor=0.5):
+    for attempt in range(retries):
+        try:
+            response = requests.get(url)
+            response.raise_for_status()  # Raises an HTTPError for bad responses
+            return response.json()  # Assume we expect JSON response
+        except requests.exceptions.RequestException as e:
+            if attempt < retries - 1:
+                wait_time = backoff_factor * (2 ** attempt)
+                time.sleep(wait_time)
+            else:
+                raise NetworkError(f'Failed to fetch {url} after {retries} attempts') from e
 
-def divide_numbers(numerator: float, denominator: float) -> float:
+# Example usage
+if __name__ == '__main__':
     try:
-        if denominator == 0:
-            raise CustomError('Denominator cannot be zero.')
-        return numerator / denominator
-    except CustomError as e:
-        logging.error(e)
-        return float('inf')  # Return infinity on error
-    except Exception as e:
-        logging.error(f'Unexpected error during division: {e}')
-        return float('inf')
-
-def safe_get(data: Dict[str, Any], key: str, default: Any = None) -> Any:
-    try:
-        return data.get(key, default)
-    except Exception as e:
-        logging.error(f'Error accessing key {key}: {e}')
-        return default
-
+        data = retry_request('https://api.example.com/data')
+        print(data)
+    except NetworkError as ne:
+        print(ne)
