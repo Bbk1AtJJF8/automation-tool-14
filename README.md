@@ -1,51 +1,40 @@
 # Automation Tool 14
 
-Automation Tool 14 is a versatile Python-based utility designed to simplify repetitive tasks in software development and system administration. With its user-friendly interface and powerful features, this tool can help you streamline your workflow and enhance productivity.
+Automation Tool 14 is a versatile Python-based utility designed to simplify everyday automation tasks for developers and system administrators. With a focus on modularity and ease of use, this tool empowers users to streamline their workflows and improve productivity.
 
 ## Features
-- **Task Scheduling**: Easily set up scheduled tasks to run scripts or commands at specified intervals using built-in cron-like functionality.
-- **API Integration**: Seamlessly connect to popular APIs, allowing you to automate data retrieval and processing from multiple sources effortlessly.
-- **File Management**: Automate file operations such as moving, renaming, and deleting files based on custom rules to keep your directories organized.
-- **Custom Scripts**: Extend the tool’s capabilities by writing your own Python scripts that can be executed within the tool, ensuring flexibility for unique automation needs.
+
+- **Task Scheduling**: Automate repetitive tasks by scheduling them to run at specified intervals using a simple cron-like interface.
+- **File Management**: Effortlessly manage files and directories, including moving, copying, and deleting operations, with built-in safety checks.
+- **API Integration**: Easily interact with RESTful APIs, enabling automated data retrieval and submission, suitable for dynamic web application workflows.
+- **Logging and Reporting**: Generate detailed logs and reports on task execution, helping users monitor and troubleshoot processes effectively.
 
 ## Installation
 
-To install Automation Tool 14, clone the repository and install the required dependencies using pip:
+To get started with Automation Tool 14, clone the repository and install the required packages:
 
 ```bash
-git clone https://github.com/Developer/automation-tool-14.git
+git clone https://github.com/yourusername/automation-tool-14.git
 cd automation-tool-14
 pip install -r requirements.txt
 ```
 
-## Basic Usage Example
+## Basic Usage
 
-Once installed, you can start using Automation Tool 14 right away. Below is a simple example that demonstrates how to schedule a Python script to run every hour.
-
-1. Create a new task by editing the configuration file:
+Once installed, you can use the command line interface to execute tasks. Below is a quick example of scheduling a file cleanup task:
 
 ```bash
-nano tasks.yaml
+python automation_tool.py schedule cleanup --path /path/to/files --age 30 --frequency daily
 ```
 
-2. Add the following YAML configuration to schedule a script:
-
-```yaml
-tasks:
-  - name: Run Data Cleanup
-    command: python cleanup.py
-    schedule: "0 * * * *"  # Every hour
-```
-
-3. Start the automation tool:
-
-```bash
-python automation_tool.py
-```
-
-Now, your data cleanup script will run automatically every hour, allowing you to focus on more critical tasks!
+This command will automatically clean up files older than 30 days in the specified directory every day.
 
 ## License
+
 ![MIT License](https://img.shields.io/badge/license-MIT-green)
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Automation Tool 14 is licensed under the MIT License. See the LICENSE file for more details. 
+
+---
+
+Feel free to explore the code, contribute to its development, and enhance your automation experience today!
