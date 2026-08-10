@@ -1,26 +1,26 @@
-import time
-import requests
+def validate_input(data):
+    if not isinstance(data, (int, float)):
+        raise ValueError('Input must be a number')
+    if data < 0:
+        raise ValueError('Input must be non-negative')
 
-class NetworkError(Exception):
-    pass
+class ProcessingLoop:
+    def __init__(self):
+        self.results = []
 
-def retry_request(url, retries=3, backoff_factor=0.5):
-    for attempt in range(retries):
-        try:
-            response = requests.get(url)
-            response.raise_for_status()  # Raises an HTTPError for bad responses
-            return response.json()  # Assume we expect JSON response
-        except requests.exceptions.RequestException as e:
-            if attempt < retries - 1:
-                wait_time = backoff_factor * (2 ** attempt)
-                time.sleep(wait_time)
-            else:
-                raise NetworkError(f'Failed to fetch {url} after {retries} attempts') from e
+    def main_loop(self, inputs):
+        for item in inputs:
+            try:
+                validate_input(item)
+                self.results.append(self.process(item))
+            except ValueError as e:
+                print(f'Input error: {e}')
 
-# Example usage
+    def process(self, value):
+        return value ** 2  # Example processing: squaring the input
+
 if __name__ == '__main__':
-    try:
-        data = retry_request('https://api.example.com/data')
-        print(data)
-    except NetworkError as ne:
-        print(ne)
+    loop = ProcessingLoop()
+    inputs = [1, 2, 3, -4, 'five']
+    loop.main_loop(inputs)
+    print(loop.results)
