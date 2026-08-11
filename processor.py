@@ -1,27 +1,36 @@
 import time
-from functools import lru_cache
+import requests
 
-@lru_cache(maxsize=128)
-def compute_heavy_operation(data):
-    time.sleep(2)  # Simulate a heavy computation
-    return sum(data)
+class NetworkOperation:
+    def __init__(self, retries=3, backoff=1):
+        self.retries = retries
+        self.backoff = backoff
 
-class DataProcessor:
-    def __init__(self, data):
-        self.data = data
-
-    def process_data(self):
-        results = []
-        for chunk in self.data:
-            result = compute_heavy_operation(tuple(chunk))
-            results.append(result)
-        return results
+    def retry_request(self, url, method='GET', **kwargs):
+        attempt = 0
+        while attempt < self.retries:
+            try:
+                if method == 'GET':
+                    response = requests.get(url, **kwargs)
+                elif method == 'POST':
+                    response = requests.post(url, **kwargs)
+                else:
+                    raise ValueError('Unsupported HTTP method')
+                response.raise_for_status()
+                return response
+            except requests.exceptions.RequestException as e:
+                attempt += 1
+                if attempt < self.retries:
+                    time.sleep(self.backoff * (2 ** (attempt - 1)))
+                    print(f'Retrying {attempt}/{self.retries}...')
+                else:
+                    print('Max retries exceeded')
+                    raise e
 
 if __name__ == '__main__':
-    data_chunks = [range(1000), range(1000)] * 5  # Sample data
-    processor = DataProcessor(data_chunks)
-    start_time = time.time()
-    results = processor.process_data()
-    end_time = time.time()
-    print(f'Processed results: {results}')
-    print(f'Time taken: {end_time - start_time} seconds')
+    net_op = NetworkOperation(retries=5, backoff=2)
+    try:
+        response = net_op.retry_request('https://api.example.com/data')
+        print(response.json())
+    except Exception as e:
+        print(f'Failed after retries: {e}')
