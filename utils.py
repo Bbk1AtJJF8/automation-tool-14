@@ -1,49 +1,24 @@
-import logging
+import time
+import random
+import requests
 
-class CustomError(Exception):
-    pass
+def retry_on_failure(max_attempts=3, delay=1):
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except requests.exceptions.RequestException as e:
+                    attempts += 1
+                    if attempts == max_attempts:
+                        raise e
+                    time.sleep(delay + random.uniform(0, 1))  # Exponential backoff with some randomness
+        return wrapper
+    return decorator
 
-
-def safe_divide(x, y):
-    try:
-        if not isinstance(x, (int, float)) or not isinstance(y, (int, float)):
-            raise TypeError('Operands must be numbers')
-        if y == 0:
-            raise ZeroDivisionError('Division by zero')
-        return x / y
-    except (TypeError, ZeroDivisionError) as e:
-        logging.error(f'Error: {e}')
-        return None
-
-
-def read_file(filepath):
-    try:
-        with open(filepath, 'r') as file:
-            return file.read()
-    except FileNotFoundError:
-        logging.error(f'File not found: {filepath}')
-        return None
-    except IOError as e:
-        logging.error(f'IO error occurred: {e}')
-        return None
-
-
-def process_data(data):
-    if not isinstance(data, list):
-        logging.error('Data must be a list')
-        return None
-    processed = []
-    for item in data:
-        if not isinstance(item, dict):
-            logging.warning(f'Skipping item, not a dict: {item}')
-            continue
-        processed.append(item)
-    return processed
-
-
-def safe_execute(func, *args, **kwargs):
-    try:
-        return func(*args, **kwargs)
-    except Exception as e:
-        logging.error(f'An error occurred: {e}')
-        return None
+@retry_on_failure(max_attempts=5, delay=2)
+def fetch_data(url):
+    response = requests.get(url)
+    response.raise_for_status()  # Raise an error for bad responses
+    return response.json()  # Return JSON content
