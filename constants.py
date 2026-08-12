@@ -1,32 +1,37 @@
-from typing import Final, List, Tuple
+MAX_CONNECTIONS = 100
+MAX_RETRIES = 5
+TIMEOUT_SECONDS = 30
+API_BASE_URL = 'https://api.example.com/'
+DEFAULT_HEADERS = {'Content-Type': 'application/json'}
+SUCCESS_STATUS_CODES = {200, 201, 202}
+ERROR_STATUS_CODES = {400, 404, 500}
 
-# Constants for application configuration
+class LogLevel:
+    DEBUG = 10
+    INFO = 20
+    WARNING = 30
+    ERROR = 40
+    CRITICAL = 50
 
-BASE_URL: Final[str] = "https://api.example.com/"
+SUPPORTED_FORMATS = ['json', 'xml', 'csv']
+DAYS_IN_WEEK = 7
+DEFAULT_CURRENCY = 'USD'
 
-# API endpoints
-API_ENDPOINTS: Final[Tuple[str, str]] = (
-    "get_items",
-    "create_item",
-)
+def convert_currency(amount, rate):
+    return amount * rate
 
-# Status codes
-class HttpStatus:
-    SUCCESS: Final[int] = 200
-    CREATED: Final[int] = 201
-    NOT_FOUND: Final[int] = 404
-    SERVER_ERROR: Final[int] = 500
+def get_api_endpoint(endpoint):
+    return f'{API_BASE_URL}{endpoint}'
 
-# Default pagination settings
-DEFAULT_PAGE_SIZE: Final[int] = 20
-DEFAULT_SORT_ORDER: Final[str] = "asc"
+# Constants for pagination
+PAGE_SIZE = 20
+MAX_PAGE_LIMIT = 100
 
-# List of supported file formats
-SUPPORTED_FORMATS: Final[List[str]] = ["json", "xml", "csv"]
+exported_constants = {
+    'MAX_CONNECTIONS': MAX_CONNECTIONS,
+    'MAX_RETRIES': MAX_RETRIES,
+    'TIMEOUT_SECONDS': TIMEOUT_SECONDS
+}
 
-# Application settings
-class AppSettings:
-    MAX_CONNECTIONS: Final[int] = 10
-    TIMEOUT: Final[int] = 30  # in seconds
-    RETRY_ATTEMPTS: Final[int] = 3
-
+if __name__ == '__main__':
+    print('Constants module loaded successfully.')
