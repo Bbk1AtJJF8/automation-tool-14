@@ -2,23 +2,20 @@ import time
 import random
 import requests
 
-def retry_on_failure(max_attempts=3, delay=1):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except requests.exceptions.RequestException as e:
-                    attempts += 1
-                    if attempts == max_attempts:
-                        raise e
-                    time.sleep(delay + random.uniform(0, 1))  # Exponential backoff with some randomness
-        return wrapper
-    return decorator
+class RetryException(Exception):
+    pass
 
-@retry_on_failure(max_attempts=5, delay=2)
-def fetch_data(url):
-    response = requests.get(url)
-    response.raise_for_status()  # Raise an error for bad responses
-    return response.json()  # Return JSON content
+def retry_request(url, max_retries=5, delay=2, backoff=2):
+    retries = 0
+    while retries < max_retries:
+        try:
+            response = requests.get(url)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            retries += 1
+            if retries == max_retries:
+                raise RetryException(f'Failed after {max_retries} attempts') from e
+            wait_time = delay * (backoff ** (retries - 1)) + random.uniform(0, 1)
+            time.sleep(wait_time)
+            print(f'Retrying {url}, attempt {retries}')
