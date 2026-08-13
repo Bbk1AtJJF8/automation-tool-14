@@ -1,37 +1,27 @@
-MAX_CONNECTIONS = 100
-MAX_RETRIES = 5
-TIMEOUT_SECONDS = 30
-API_BASE_URL = 'https://api.example.com/'
-DEFAULT_HEADERS = {'Content-Type': 'application/json'}
-SUCCESS_STATUS_CODES = {200, 201, 202}
-ERROR_STATUS_CODES = {400, 404, 500}
+import json
+import os
 
-class LogLevel:
-    DEBUG = 10
-    INFO = 20
-    WARNING = 30
-    ERROR = 40
-    CRITICAL = 50
+def load_config(file_path, defaults):
+    if not os.path.exists(file_path):
+        return defaults
+    with open(file_path, 'r') as config_file:
+        try:
+            config = json.load(config_file)
+        except json.JSONDecodeError:
+            return defaults
+    combined_config = defaults.copy()
+    combined_config.update(config)
+    return combined_config
 
-SUPPORTED_FORMATS = ['json', 'xml', 'csv']
-DAYS_IN_WEEK = 7
-DEFAULT_CURRENCY = 'USD'
-
-def convert_currency(amount, rate):
-    return amount * rate
-
-def get_api_endpoint(endpoint):
-    return f'{API_BASE_URL}{endpoint}'
-
-# Constants for pagination
-PAGE_SIZE = 20
-MAX_PAGE_LIMIT = 100
-
-exported_constants = {
-    'MAX_CONNECTIONS': MAX_CONNECTIONS,
-    'MAX_RETRIES': MAX_RETRIES,
-    'TIMEOUT_SECONDS': TIMEOUT_SECONDS
+# Default configuration values
+DEFAULTS = {
+    'host': 'localhost',
+    'port': 8080,
+    'debug': False,
 }
 
+# Example of loading configuration
+config = load_config('config.json', DEFAULTS)
+
 if __name__ == '__main__':
-    print('Constants module loaded successfully.')
+    print(config)  # For demo purposes
