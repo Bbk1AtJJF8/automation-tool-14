@@ -1,28 +1,30 @@
 import json
 import os
 
+DEFAULT_CONFIG = {
+    'log_level': 'INFO',
+    'max_connections': 10,
+    'timeout': 30,
+    'retry_attempts': 3
+}
+
 class ConfigLoader:
-    def __init__(self, default_file='defaults.json', user_file='config.json'):
-        self.default_file = default_file
-        self.user_file = user_file
+    def __init__(self, config_file='config.json'):
+        self.config_file = config_file
         self.config = self.load_config()
 
     def load_config(self):
-        defaults = self.load_json(self.default_file)
-        user_config = self.load_json(self.user_file) or {}
-        return {**defaults, **user_config}
+        if os.path.exists(self.config_file):
+            with open(self.config_file, 'r') as file:
+                try:
+                    custom_config = json.load(file)
+                    return {**DEFAULT_CONFIG, **custom_config}
+                except json.JSONDecodeError:
+                    print('Error decoding JSON file. Using defaults.')
+        return DEFAULT_CONFIG
 
-    def load_json(self, filename):
-        if os.path.exists(filename):
-            with open(filename, 'r') as file:
-                return json.load(file)
-        return {}
+    def get(self, key):
+        return self.config.get(key, None)
 
-    def get(self, key, default=None):
-        return self.config.get(key, default)
-
-loader = ConfigLoader()
-
-if __name__ == '__main__':
-    print(loader.config)
-    print(loader.get('some_key', 'default_value'))
+    def __repr__(self):
+        return json.dumps(self.config, indent=2)
