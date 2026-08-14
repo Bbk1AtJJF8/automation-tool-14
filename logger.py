@@ -1,30 +1,33 @@
 import logging
-from logging.handlers import RotatingFileHandler
 
-class CustomLogger:
-    def __init__(self, name, log_file, max_bytes=5*1024*1024, backup_count=5):
-        self.logger = logging.getLogger(name)
-        self.logger.setLevel(logging.DEBUG)
-        self.handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
-        self.formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        self.handler.setFormatter(self.formatter)
-        self.logger.addHandler(self.handler)
+# Configure logging settings
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s - %(levelname)s - %(message)s')
 
-    def log_info(self, message):
-        self.logger.info(message)
+# Initialize logger
+logger = logging.getLogger(__name__)
 
-    def log_warning(self, message):
-        self.logger.warning(message)
+def log_error(message):
+    logger.error(message)
 
-    def log_error(self, message):
-        self.logger.error(message)
+def log_info(message):
+    logger.info(message)
 
-    def log_debug(self, message):
-        self.logger.debug(message)
+def log_warning(message):
+    logger.warning(message)
+
+def main_loop(data_list):
+    for data in data_list:
+        if not isinstance(data, dict):
+            log_error('Invalid input: Expected dictionary')
+            continue
+        if 'name' not in data:
+            log_warning('Missing name field')
+            continue
+        log_info(f'Processing: {data['name']}')
+        # Simulate processing
+        # ... processing logic ...
 
 if __name__ == '__main__':
-    log = CustomLogger('MyApp', 'app.log')
-    log.log_info('This is an info message.')
-    log.log_warning('This is a warning message.')
-    log.log_error('This is an error message.')
-    log.log_debug('This is a debug message.')
+    sample_data = [{'name': 'Task1'}, {'data': 'Invalid'}, 'String instead of dict']
+    main_loop(sample_data)
