@@ -1,31 +1,33 @@
-import time
-import requests
+import json
+import os
 
-class NetworkError(Exception):
-    pass
+class DataHandler:
+    def __init__(self, filepath):
+        self.filepath = filepath
+        self.data = self.load_data() 
 
-def retry_decorator(max_retries=3, backoff_factor=1):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            retries = 0
-            while retries < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except (requests.ConnectionError, requests.Timeout) as e:
-                    retries += 1
-                    wait_time = backoff_factor * (2 ** (retries - 1))
-                    print(f'Retry {retries}/{max_retries}... waiting {wait_time} seconds.')
-                    time.sleep(wait_time)
-                    if retries == max_retries:
-                        raise NetworkError('Max retries exceeded') from e
-        return wrapper
-    return decorator
+    def load_data(self):
+        if os.path.exists(self.filepath):
+            with open(self.filepath, 'r') as file:
+                return json.load(file)
+        return {}
 
-@retry_decorator(max_retries=5, backoff_factor=2)
-def fetch_data(url):
-    response = requests.get(url)
-    response.raise_for_status()
-    return response.json()
+    def save_data(self):
+        with open(self.filepath, 'w') as file:
+            json.dump(self.data, file, indent=4)
 
-# Example usage
-# data = fetch_data('https://api.example.com/data')
+    def update_data(self, key, value):
+        self.data[key] = value
+        self.save_data() 
+
+    def get_data(self, key, default=None):
+        return self.data.get(key, default)
+
+    def delete_data(self, key):
+        if key in self.data:
+            del self.data[key]
+            self.save_data()
+
+    def clear_data(self):
+        self.data.clear()
+        self.save_data()
