@@ -1,37 +1,30 @@
 import logging
-import time
+from logging.handlers import RotatingFileHandler
 
-# Configure logger
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+class CustomLogger:
+    def __init__(self, name, log_file, max_bytes=5*1024*1024, backup_count=5):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(logging.DEBUG)
+        self.handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+        self.formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+        self.handler.setFormatter(self.formatter)
+        self.logger.addHandler(self.handler)
 
+    def log_info(self, message):
+        self.logger.info(message)
 
-def retry_on_exception(max_retries=3, delay=2):
-    def decorator(func):
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    attempts += 1
-                    logger.warning(f'Attempt {attempts} failed with error: {e}')
-                    if attempts < max_retries:
-                        logger.info(f'Retrying in {delay} seconds...')
-                        time.sleep(delay)
-                    else:
-                        logger.error('Max retries reached, operation failed.')
-                        raise
-        return wrapper
-    return decorator
+    def log_warning(self, message):
+        self.logger.warning(message)
 
+    def log_error(self, message):
+        self.logger.error(message)
 
-@retry_on_exception(max_retries=5, delay=3)
-def fetch_data_from_network(url):
-    # Simulating network operation
-    if url != 'http://valid-url.com':
-        raise ConnectionError('Failed to connect')
-    return 'Data from ' + url
+    def log_debug(self, message):
+        self.logger.debug(message)
 
-# Example call (this would normally be in another part of your application):
-# fetch_data_from_network('http://invalid-url.com')
+if __name__ == '__main__':
+    log = CustomLogger('MyApp', 'app.log')
+    log.log_info('This is an info message.')
+    log.log_warning('This is a warning message.')
+    log.log_error('This is an error message.')
+    log.log_debug('This is a debug message.')
