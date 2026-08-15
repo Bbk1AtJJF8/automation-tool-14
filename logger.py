@@ -1,33 +1,20 @@
 import logging
+from logging.handlers import RotatingFileHandler
 
-# Configure logging settings
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+def setup_logger(log_file='app.log', max_bytes=10*1024*1024, backup_count=3):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.DEBUG)
+    handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    return logger
 
-# Initialize logger
-logger = logging.getLogger(__name__)
-
-def log_error(message):
-    logger.error(message)
-
-def log_info(message):
-    logger.info(message)
-
-def log_warning(message):
-    logger.warning(message)
-
-def main_loop(data_list):
-    for data in data_list:
-        if not isinstance(data, dict):
-            log_error('Invalid input: Expected dictionary')
-            continue
-        if 'name' not in data:
-            log_warning('Missing name field')
-            continue
-        log_info(f'Processing: {data['name']}')
-        # Simulate processing
-        # ... processing logic ...
-
+# Example usage
 if __name__ == '__main__':
-    sample_data = [{'name': 'Task1'}, {'data': 'Invalid'}, 'String instead of dict']
-    main_loop(sample_data)
+    log = setup_logger()
+    log.debug('Debug message')
+    log.info('Info message')
+    log.warning('Warning message')
+    log.error('Error message')
+    log.critical('Critical message')
