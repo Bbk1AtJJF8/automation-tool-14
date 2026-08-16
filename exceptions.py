@@ -1,25 +1,25 @@
 class CustomError(Exception):
-    """Custom exception for specific errors during processing."""
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
-
-class ValidationError(CustomError):
-    """Exception raised for validation errors."""
-    def __init__(self, field: str, message: str) -> None:
-        super().__init__(message)
-        self.field = field
-
-class ConnectionError(CustomError):
-    """Exception raised for connection-related issues."""
-    def __init__(self, code: int, message: str) -> None:
+    def __init__(self, message, code=500):
         super().__init__(message)
         self.code = code
 
-def handle_error(err: CustomError) -> None:
-    """Handles exceptions by logging the error message."""
-    print(f'Error: {err.message}')
-    if isinstance(err, ValidationError):
-        print(f'Validation failed for field: {err.field}')
-    elif isinstance(err, ConnectionError):
-        print(f'Connection error code: {err.code}')
+class NotFoundError(CustomError):
+    def __init__(self, resource):
+        super().__init__(f'{resource} not found')
+        self.code = 404
+
+class ValidationError(CustomError):
+    def __init__(self, errors):
+        super().__init__('Validation failed')
+        self.errors = errors
+
+class AuthenticationError(CustomError):
+    def __init__(self):
+        super().__init__('Authentication required')
+        self.code = 401
+
+class PermissionError(CustomError):
+    def __init__(self):
+        super().__init__('Permission denied')
+        self.code = 403
+
