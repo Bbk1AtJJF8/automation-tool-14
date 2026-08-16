@@ -1,26 +1,28 @@
 import json
+import logging
 
-class InputValidationError(Exception):
-    pass
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class Handler:
-    def process_input(self, user_input):
-        self.validate_input(user_input)
-        # Process the input if valid
-        return f'Processed: {user_input}'
+    def __init__(self, data):
+        self.data = data
 
-    def validate_input(self, user_input):
-        if not isinstance(user_input, str) or not user_input:
-            raise InputValidationError('Input must be a non-empty string.')
-        if len(user_input) > 100:
-            raise InputValidationError('Input exceeds maximum length of 100 characters.')
+    def process_data(self):
+        try:
+            processed = self._clean_data(self.data)
+            return json.dumps(processed)
+        except Exception as e:
+            logger.error(f"Error processing data: {e}")
+            return None
+
+    def _clean_data(self, data):
+        cleaned_data = {k: v for k, v in data.items() if v is not None}
+        logger.info("Data cleaned successfully")
+        return cleaned_data
 
 if __name__ == '__main__':
-    handler = Handler()
-    inputs = ["valid input", "", 123, "a" * 101]
-    for inp in inputs:
-        try:
-            result = handler.process_input(inp)
-            print(result)
-        except InputValidationError as e:
-            print(f'Error: {e}')
+    sample_data = {"name": "John", "age": None, "city": "New York"}
+    handler = Handler(sample_data)
+    result = handler.process_data()
+    print(result)  # Should print cleaned JSON data
