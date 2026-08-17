@@ -1,30 +1,31 @@
 import json
 import os
 
-DEFAULT_CONFIG = {
-    'log_level': 'INFO',
-    'max_connections': 10,
-    'timeout': 30,
-    'retry_attempts': 3
-}
-
 class ConfigLoader:
-    def __init__(self, config_file='config.json'):
-        self.config_file = config_file
-        self.config = self.load_config()
+    def __init__(self, default_config=None):
+        if default_config is None:
+            default_config = {}
+        self.default_config = default_config
+        self.loaded_config = self.default_config.copy()
 
-    def load_config(self):
-        if os.path.exists(self.config_file):
-            with open(self.config_file, 'r') as file:
-                try:
-                    custom_config = json.load(file)
-                    return {**DEFAULT_CONFIG, **custom_config}
-                except json.JSONDecodeError:
-                    print('Error decoding JSON file. Using defaults.')
-        return DEFAULT_CONFIG
+    def load_from_file(self, filepath):
+        if not os.path.isfile(filepath):
+            raise FileNotFoundError(f'Configuration file not found: {filepath}')
+        with open(filepath, 'r') as file:
+            config_data = json.load(file)
+            self.loaded_config.update(config_data)
 
-    def get(self, key):
-        return self.config.get(key, None)
+    def get(self, key, fallback=None):
+        return self.loaded_config.get(key, fallback)
 
-    def __repr__(self):
-        return json.dumps(self.config, indent=2)
+    def set(self, key, value):
+        self.loaded_config[key] = value
+
+    def save_to_file(self, filepath):
+        with open(filepath, 'w') as file:
+            json.dump(self.loaded_config, file, indent=4)
+
+# Example usage:
+# loader = ConfigLoader({'default_key': 'default_value'})
+# loader.load_from_file('config.json')
+# print(loader.get('some_key', 'fallback_value'))
