@@ -1,28 +1,41 @@
-import json
 import logging
+from queue import Queue
+from threading import Thread
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+class TaskHandler:
+    def __init__(self, num_workers):
+        self.tasks = Queue()
+        self.workers = []
+        for _ in range(num_workers):
+            worker = Thread(target=self.process_tasks)
+            worker.start()
+            self.workers.append(worker)
 
-class Handler:
-    def __init__(self, data):
-        self.data = data
+    def add_task(self, task):
+        self.tasks.put(task)
 
-    def process_data(self):
-        try:
-            processed = self._clean_data(self.data)
-            return json.dumps(processed)
-        except Exception as e:
-            logger.error(f"Error processing data: {e}")
-            return None
+    def process_tasks(self):
+        while True:
+            task = self.tasks.get()
+            if task is None:
+                break
+            self.execute_task(task)
+            self.tasks.task_done()
 
-    def _clean_data(self, data):
-        cleaned_data = {k: v for k, v in data.items() if v is not None}
-        logger.info("Data cleaned successfully")
-        return cleaned_data
+    def execute_task(self, task):
+        logging.info(f'Processing task: {task}')
+        # Simulate task processing
+
+    def wait_completion(self):
+        self.tasks.join()
+        for _ in self.workers:
+            self.tasks.put(None)
+        for worker in self.workers:
+            worker.join()
 
 if __name__ == '__main__':
-    sample_data = {"name": "John", "age": None, "city": "New York"}
-    handler = Handler(sample_data)
-    result = handler.process_data()
-    print(result)  # Should print cleaned JSON data
+    logging.basicConfig(level=logging.INFO)
+    handler = TaskHandler(num_workers=3)
+    for i in range(10):
+        handler.add_task(f'Task {i}')
+    handler.wait_completion()
