@@ -2,30 +2,26 @@ import json
 import os
 
 class ConfigLoader:
-    def __init__(self, default_config=None):
-        if default_config is None:
-            default_config = {}
-        self.default_config = default_config
-        self.loaded_config = self.default_config.copy()
+    def __init__(self, default_config_path='default_config.json'):
+        self.default_config_path = default_config_path
+        self.config = self.load_config()
 
-    def load_from_file(self, filepath):
-        if not os.path.isfile(filepath):
-            raise FileNotFoundError(f'Configuration file not found: {filepath}')
-        with open(filepath, 'r') as file:
-            config_data = json.load(file)
-            self.loaded_config.update(config_data)
+    def load_config(self):
+        config = self.load_defaults()
+        user_config_path = os.getenv('CONFIG_PATH', 'user_config.json')
+        if os.path.exists(user_config_path):
+            user_config = self.load_user_config(user_config_path)
+            config.update(user_config)
+        return config
 
-    def get(self, key, fallback=None):
-        return self.loaded_config.get(key, fallback)
+    def load_defaults(self):
+        with open(self.default_config_path, 'r') as f:
+            return json.load(f)
 
-    def set(self, key, value):
-        self.loaded_config[key] = value
+    def load_user_config(self, user_config_path):
+        with open(user_config_path, 'r') as f:
+            return json.load(f)
 
-    def save_to_file(self, filepath):
-        with open(filepath, 'w') as file:
-            json.dump(self.loaded_config, file, indent=4)
-
-# Example usage:
-# loader = ConfigLoader({'default_key': 'default_value'})
-# loader.load_from_file('config.json')
-# print(loader.get('some_key', 'fallback_value'))
+if __name__ == '__main__':
+    loader = ConfigLoader()
+    print(loader.config)
