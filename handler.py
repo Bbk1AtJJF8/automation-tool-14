@@ -1,41 +1,43 @@
-import logging
-from queue import Queue
-from threading import Thread
+import json
+from typing import Any, Dict, List, Union
 
-class TaskHandler:
-    def __init__(self, num_workers):
-        self.tasks = Queue()
-        self.workers = []
-        for _ in range(num_workers):
-            worker = Thread(target=self.process_tasks)
-            worker.start()
-            self.workers.append(worker)
 
-    def add_task(self, task):
-        self.tasks.put(task)
+def load_json(file_path: str) -> Union[Dict[str, Any], List[Any]]:
+    try:
+        with open(file_path, 'r', encoding='utf-8') as file:
+            return json.load(file)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f'Error loading JSON: {e}')
+        return {}
 
-    def process_tasks(self):
-        while True:
-            task = self.tasks.get()
-            if task is None:
-                break
-            self.execute_task(task)
-            self.tasks.task_done()
 
-    def execute_task(self, task):
-        logging.info(f'Processing task: {task}')
-        # Simulate task processing
+def save_json(file_path: str, data: Union[Dict[str, Any], List[Any]]) -> None:
+    try:
+        with open(file_path, 'w', encoding='utf-8') as file:
+            json.dump(data, file, ensure_ascii=False, indent=4)
+    except IOError as e:
+        print(f'Error saving JSON: {e}')
 
-    def wait_completion(self):
-        self.tasks.join()
-        for _ in self.workers:
-            self.tasks.put(None)
-        for worker in self.workers:
-            worker.join()
 
-if __name__ == '__main__':
-    logging.basicConfig(level=logging.INFO)
-    handler = TaskHandler(num_workers=3)
-    for i in range(10):
-        handler.add_task(f'Task {i}')
-    handler.wait_completion()
+def update_json(file_path: str, updates: Dict[str, Any]) -> None:
+    data = load_json(file_path)
+    data.update(updates)
+    save_json(file_path, data)
+
+
+def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
+    items = []
+    for k, v in d.items():
+        new_key = f'{parent_key}{sep}{k}' if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten_dict(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
+def merge_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:
+    merged = {}
+    for dictionary in dicts:
+        merged.update(dictionary)
+    return merged
