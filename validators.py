@@ -1,49 +1,20 @@
-from typing import Any, Dict, List
+import re
 
+def validate_input(data):
+    if not isinstance(data, str):
+        raise ValueError('Input must be a string')
+    if not 1 <= len(data) <= 100:
+        raise ValueError('Input length must be between 1 and 100')
+    if not re.match('^[a-zA-Z0-9_]+$', data):
+        raise ValueError('Input must contain only alphanumeric characters and underscores')
+    return True
 
-def is_valid_email(email: str) -> bool:
-    """
-    Validate whether the provided email address is in the correct format.
-
-    Args:
-        email (str): The email address to validate.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    import re
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-    return bool(re.match(pattern, email))
-
-
-def is_valid_age(age: Any) -> bool:
-    """
-    Check if the provided age is a valid non-negative integer.
-
-    Args:
-        age (Any): The age to check.
-
-    Returns:
-        bool: True if valid, False otherwise.
-    """
-    if isinstance(age, int) and age >= 0:
-        return True
-    return False
-
-
-def validate_user_data(user_data: Dict[str, Any]) -> List[str]:
-    """
-    Validate user data ensuring all fields meet specified criteria.
-
-    Args:
-        user_data (Dict[str, Any]): A dictionary containing user data.
-
-    Returns:
-        List[str]: A list of error messages or an empty list if valid.
-    """
-    errors = []
-    if 'email' not in user_data or not is_valid_email(user_data['email']):
-        errors.append('Invalid email address.')
-    if 'age' in user_data and not is_valid_age(user_data['age']):
-        errors.append('Age must be a non-negative integer.')
-    return errors
+if __name__ == '__main__':
+    inputs = ['valid_input123', 'invalid input', 'too_long_input_' + 'a' * 90]
+    for inp in inputs:
+        try:
+            print(f'Validating: {inp}')
+            validate_input(inp)
+            print('Input is valid')
+        except ValueError as e:
+            print(f'Validation error: {e}')
