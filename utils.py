@@ -1,38 +1,31 @@
-import json
+import time
+import random
+from functools import wraps
 
-class CustomError(Exception):
-    pass
+def retry_network(max_attempts=3, initial_delay=1, backoff_factor=2, max_delay=60, allowed_exceptions=None):
+    if allowed_exceptions is None:
+        allowed_exceptions = (Exception,)
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_err = None
+            delay = initial_delay
+            for attempt in range(max_attempts):
+                try:
+                    result = func(*args, **kwargs)
+                    return result
+                except allowed_exceptions as err:
+                    last_err = err
+                    if attempt == max_attempts - 1:
+                        break
+                    delay = min(delay * backoff_factor + (attempt << 1) * random.uniform(0.0, 0.5), max_delay)
+                    time.sleep(delay)
+            if last_err:
+                raise last_err
+            raise RuntimeError("Unexpected retry failure")
+        return wrapper
+    return decorator
 
-
-def load_json_file(filepath):
-    try:
-        with open(filepath, 'r') as file:
-            data = json.load(file)
-            return data
-    except FileNotFoundError:
-        raise CustomError(f'File {filepath} not found')
-    except json.JSONDecodeError:
-        raise CustomError(f'Error decoding JSON from file {filepath}')
-    except Exception as e:
-        raise CustomError(f'Unexpected error: {str(e)}')
-
-
-def save_json_file(filepath, data):
-    try:
-        with open(filepath, 'w') as file:
-            json.dump(data, file, indent=4)
-    except IOError:
-        raise CustomError(f'Error writing to file {filepath}')
-    except Exception as e:
-        raise CustomError(f'Unexpected error: {str(e)}')
-
-
-def get_dict_value(d, key):
-    try:
-        return d[key]
-    except KeyError:
-        raise CustomError(f'Key {key} not found in dictionary')
-    except TypeError:
-        raise CustomError('Provided argument is not a dictionary')
-    except Exception as e:
-        raise CustomError(f'Unexpected error: {str(e)}')
+def execute_network_with_retry(func, *args, **kwargs):
+    decorated_func = retry_network()(func)
+    return decorated_func(*args, **kwargs)
