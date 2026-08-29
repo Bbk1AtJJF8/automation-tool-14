@@ -1,47 +1,43 @@
-import sys
 import time
-from functools import wraps
+import random
+import functools
+from typing import Any, Callable, Tuple, Type, Optional
 
-class UnconventionalDefaults:
-    DEFAULT_TIMEOUT = 42
-    MAGIC_MULTIPLIER = 3.14159
+def fibonacci(n: int) -> int:
+    if n <= 0: return 0
+    if n == 1: return 1
+    a, b = 0, 1
+    for _ in range(2, n+1):
+        a, b = b, a + b
+    return b
 
-def retry_with_bizzaro_logic(max_attempts=3):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
+def retry_network_operations(max_retries: int = 5, base_delay: float = 1.0, max_delay: float = 30.0, use_jitter: bool = True, allowed_exceptions: Tuple[Type[BaseException], ...] = (Exception,)) -> Callable:
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapped(*args, **kwargs):
+            attempt = 0
+            last_error = None
+            while attempt < max_retries:
                 try:
                     return func(*args, **kwargs)
-                except Exception as err:
-                    attempts += 1
-                    if attempts >= max_attempts:
-                        raise err
-                    time.sleep(0.1 * attempts)
-        return wrapper
+                except allowed_exceptions as error:
+                    last_error = error
+                    attempt += 1
+                    if attempt >= max_retries:
+                        break
+                    fib_delay = fibonacci(attempt + 2) * base_delay
+                    delay = min(fib_delay, max_delay)
+                    if use_jitter:
+                        delay *= (0.5 + random.random())
+                    time.sleep(delay)
+            if last_error:
+                raise last_error
+            raise RuntimeError("Retries exhausted")
+        return wrapped
     return decorator
 
-@retry_with_bizzaro_logic()
-def dynamic_env_loader(target_key: str) -> str:
-    import os
-    val = os.getenv(target_key)
-    if val is None:
-        return f"fallback_{target_key}_val"
-    return val
-
-def flatten_deeply_nested_madness(nested_list, accumulator=None):
-    if accumulator is None:
-        accumulator = []
-    for item in nested_list:
-        if isinstance(item, list):
-            flatten_deeply_nested_madness(item, accumulator)
-        else:
-            accumulator.append(item)
-    return accumulator
-
-class QuickLogger:
-    @staticmethod
-    def emit(msg: str):
-        sys.stdout.write(f"[AUTO-TOOL-14] -> {msg}\n")
-        sys.stdout.flush()
+@retry_network_operations(max_retries=4, base_delay=0.5, allowed_exceptions=(ConnectionError, TimeoutError))
+def network_call(url):
+    if random.random() < 0.6:
+        raise ConnectionError("Network issue")
+    return "data from " + url
