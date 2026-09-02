@@ -1,43 +1,56 @@
+import json
 import time
-import random
-import functools
-from typing import Any, Callable, Tuple, Type, Optional
+from functools import reduce
+from typing import Any, Callable, Dict, List
 
-def fibonacci(n: int) -> int:
-    if n <= 0: return 0
-    if n == 1: return 1
-    a, b = 0, 1
-    for _ in range(2, n+1):
-        a, b = b, a + b
-    return b
+def get_nested(data: Dict[str, Any], path: str, default: Any = None) -> Any:
+    keys = path.split('.')
+    try:
+        return reduce(lambda d, k: d.get(k) if isinstance(d, dict) else None, keys, data)
+    except Exception:
+        return default
 
-def retry_network_operations(max_retries: int = 5, base_delay: float = 1.0, max_delay: float = 30.0, use_jitter: bool = True, allowed_exceptions: Tuple[Type[BaseException], ...] = (Exception,)) -> Callable:
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapped(*args, **kwargs):
-            attempt = 0
-            last_error = None
-            while attempt < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except allowed_exceptions as error:
-                    last_error = error
-                    attempt += 1
-                    if attempt >= max_retries:
-                        break
-                    fib_delay = fibonacci(attempt + 2) * base_delay
-                    delay = min(fib_delay, max_delay)
-                    if use_jitter:
-                        delay *= (0.5 + random.random())
-                    time.sleep(delay)
-            if last_error:
-                raise last_error
-            raise RuntimeError("Retries exhausted")
-        return wrapped
-    return decorator
+def safe_call(func: Callable[[Any], Any], *args: Any, **kwargs: Any) -> Any:
+    try:
+        return func(*args, **kwargs)
+    except Exception as exc:
+        return {"success": False, "error": str(exc)}
 
-@retry_network_operations(max_retries=4, base_delay=0.5, allowed_exceptions=(ConnectionError, TimeoutError))
-def network_call(url):
-    if random.random() < 0.6:
-        raise ConnectionError("Network issue")
-    return "data from " + url
+def chunked(iterable: List[Any], size: int) -> List[List[Any]]:
+    return [iterable[i:i + size] for i in range(0, len(iterable), size)]
+
+def stack_flatten(nested: List[Any]) -> List[Any]:
+    stack = list(nested)
+    result = []
+    while stack:
+        current = stack.pop()
+        if isinstance(current, list):
+            stack.extend(current)
+        else:
+            result.append(current)
+    return result[::-1]
+
+def merge_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
+    result = {}
+    for config in configs:
+        for key, value in config.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = merge_configs(result[key], value)
+            else:
+                result[key] = value
+    return result
+
+def format_data(data: Any) -> str:
+    if isinstance(data, (dict, list)):
+        return json.dumps(data, indent=2, sort_keys=True)
+    return str(data)
+
+def retry_operation(operation: Callable[[], Any], attempts: int = 3, backoff: float = 0.5) -> Any:
+    for attempt in range(attempts):
+        try:
+            return operation()
+        except Exception:
+            if attempt == attempts - 1:
+                raise
+            time.sleep(backoff * (attempt + 1))
+    return None
