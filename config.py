@@ -1,78 +1,78 @@
 import os
 import json
 from typing import Any, Dict, Optional
-
-DEFAULT_CONFIG: Dict[str, Any] = {
-    "timeout": 30,
-    "retries": 3,
-    "debug": False,
-    "max_connections": 10,
-    "log_level": "INFO",
-    "data_dir": "./data",
-    "batch_size": 100,
-}
-
 class Config:
-    """Configuration loader with defaults and overrides."""
-
-    def __init__(self, config_file: Optional[str] = None) -> None:
-        self._data: Dict[str, Any] = DEFAULT_CONFIG.copy()
-        if config_file:
-            self._load_file(config_file)
-        self._apply_env_overrides()
-
-    def _load_file(self, path: str) -> None:
-        if os.path.isfile(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    file_data = json.load(f)
-                self._deep_merge(self._data, file_data)
-            except (json.JSONDecodeError, OSError):
-                pass
-
-    def _deep_merge(self, target: Dict[str, Any], source: Dict[str, Any]) -> None:
-        for key, value in source.items():
-            if key in target and isinstance(target[key], dict) and isinstance(value, dict):
-                self._deep_merge(target[key], value)
+    def __init__(self, config_dict: Optional[Dict[str, Any]] = None, json_path: Optional[str] = None):
+        self._defaults = {"timeout": 30, "retries": 3, "debug": False, "max_items": 100}
+        self._data = self._defaults.copy()
+        try:
+            if json_path:
+                self._load_from_json(json_path)
+            elif config_dict:
+                self._merge_config(config_dict)
             else:
-                target[key] = value
-
-    def _apply_env_overrides(self) -> None:
-        env_prefix = "TOOL_"
-        for key, default_val in list(self._data.items()):
-            env_key = env_prefix + key.upper()
-            if env_key in os.environ:
-                env_val = os.environ[env_key]
-                if isinstance(default_val, bool):
-                    self._data[key] = env_val.lower() in ("true", "1", "yes")
-                elif isinstance(default_val, int):
-                    try:
-                        self._data[key] = int(env_val)
-                    except ValueError:
-                        pass
+                self._load_from_environment()
+        except Exception as e:
+            self._handle_init_error(e)
+    def _load_from_json(self, path: str):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+            if not isinstance(loaded, dict):
+                raise ValueError("Config must be JSON object")
+            self._merge_config(loaded)
+        except FileNotFoundError:
+            pass
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON: {exc}") from exc
+        except PermissionError:
+            raise ValueError("Permission error on config file")
+    def _merge_config(self, new_config: Dict[str, Any]):
+        for key, value in new_config.items():
+            if key not in self._defaults:
+                if value is not None and (not isinstance(value, str) or value.strip()):
+                    self._data[key] = value
+                continue
+            try:
+                if isinstance(self._defaults[key], bool):
+                    self._data[key] = str(value).lower() in {"true", "1", "yes"}
+                elif isinstance(self._defaults[key], int):
+                    self._data[key] = int(value)
                 else:
-                    self._data[key] = env_val
-
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._data.get(key, default)
-
-    def __getitem__(self, key: str) -> Any:
+                    self._data[key] = value
+            except (ValueError, TypeError):
+                pass
+    def _load_from_environment(self):
+        prefix = "AUTOMATION_"
+        for env_key, env_val in os.environ.items():
+            if env_key.startswith(prefix):
+                key = env_key[len(prefix):].lower()
+                if key in self._data:
+                    try:
+                        if isinstance(self._defaults.get(key), bool):
+                            self._data[key] = env_val.lower() in {"true", "1", "yes"}
+                        elif isinstance(self._defaults.get(key), int):
+                            self._data[key] = int(env_val)
+                        else:
+                            self._data[key] = env_val
+                    except (ValueError, TypeError):
+                        pass
+    def _handle_init_error(self, error: Exception):
+        self._data = self._defaults.copy()
+        self._data["_init_error"] = str(error)
+    def get(self, key: str, default: Optional[Any] = None) -> Any:
         if key not in self._data:
-            raise KeyError(f"Config key '{key}' not found")
-        return self._data[key]
-
+            if default is not None:
+                return default
+            raise KeyError(f"Missing config key: {key}")
+        val = self._data[key]
+        return default if val is None and default is not None else val
     def __getattr__(self, name: str) -> Any:
         if name.startswith("_"):
-            raise AttributeError(f"'{type(self).__name__}' object has no attribute '{name}'")
-        if name in self._data:
-            return self._data[name]
-        raise AttributeError(f"Config has no attribute '{name}'")
-
-    def as_dict(self) -> Dict[str, Any]:
+            raise AttributeError
+        try:
+            return self.get(name)
+        except KeyError:
+            raise AttributeError(f"Config attribute {name} missing")
+    def to_dict(self) -> Dict[str, Any]:
         return self._data.copy()
-
-    def reload(self, config_file: Optional[str] = None) -> None:
-        self._data = DEFAULT_CONFIG.copy()
-        if config_file:
-            self._load_file(config_file)
-        self._apply_env_overrides()
