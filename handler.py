@@ -1,43 +1,54 @@
-import json
-from typing import Any, Dict, List, Union
+import time
+import random
+from collections import deque
 
+class Handler:
+    def __init__(self):
+        self.task_queue = deque()
+        self.completed = []
 
-def load_json(file_path: str) -> Union[Dict[str, Any], List[Any]]:
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
-            return json.load(file)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f'Error loading JSON: {e}')
-        return {}
+    def add_task(self, task_type, **kwargs):
+        self.task_queue.append((task_type, kwargs))
 
+    def execute_all(self):
+        while self.task_queue:
+            task_type, params = self.task_queue.popleft()
+            outcome = self._handle_task(task_type, params)
+            self.completed.append(outcome)
 
-def save_json(file_path: str, data: Union[Dict[str, Any], List[Any]]) -> None:
-    try:
-        with open(file_path, 'w', encoding='utf-8') as file:
-            json.dump(data, file, ensure_ascii=False, indent=4)
-    except IOError as e:
-        print(f'Error saving JSON: {e}')
+    def _handle_task(self, task_type, params):
+        if task_type == "simulate_work":
+            duration = params.get("duration", 1)
+            time.sleep(duration)
+            return {"type": task_type, "status": "done", "duration": duration}
 
+        elif task_type == "generate_data":
+            count = params.get("count", 3)
+            data = [random.randint(1, 100) for _ in range(count)]
+            return {"type": task_type, "status": "done", "data": data}
 
-def update_json(file_path: str, updates: Dict[str, Any]) -> None:
-    data = load_json(file_path)
-    data.update(updates)
-    save_json(file_path, data)
+        elif task_type == "random_delay":
+            delay = random.uniform(0.2, 1.0)
+            time.sleep(delay)
+            return {"type": task_type, "status": "done", "actual_delay": delay}
 
-
-def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
-    items = []
-    for k, v in d.items():
-        new_key = f'{parent_key}{sep}{k}' if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key, sep=sep).items())
         else:
-            items.append((new_key, v))
-    return dict(items)
+            return {"type": task_type, "status": "unknown"}
 
+    def get_summary(self):
+        return {
+            "total": len(self.completed),
+            "tasks": self.completed
+        }
 
-def merge_dicts(*dicts: Dict[str, Any]) -> Dict[str, Any]:
-    merged = {}
-    for dictionary in dicts:
-        merged.update(dictionary)
-    return merged
+def create_default_handler():
+    handler = Handler()
+    handler.add_task("simulate_work", duration=0.5)
+    handler.add_task("generate_data", count=5)
+    handler.add_task("random_delay")
+    return handler
+
+def run_automation():
+    handler = create_default_handler()
+    handler.execute_all()
+    return handler.get_summary()
