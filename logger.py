@@ -1,21 +1,39 @@
+import sys
 import logging
-from logging.handlers import RotatingFileHandler
+from typing import Any, Callable
 
-def setup_logger(log_file='app.log', max_bytes=5*1024*1024, backup_count=3):
-    logger = logging.getLogger('MyLogger')
-    logger.setLevel(logging.DEBUG)
+class InputGuard:
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
 
-    handler = RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    def validate(self, data: Any, schema: Callable[[Any], bool]) -> Any:
+        try:
+            if not schema(data):
+                raise ValueError(f"Sanity check failed for input: {type(data).__name__}")
+            return data
+        except Exception as e:
+            self.logger.error(f"Invalid stream detected: {e}")
+            return None
+
+def setup_stream_handler(name: str) -> logging.Logger:
+    logger = logging.getLogger(name)
+    handler = logging.StreamHandler(sys.stdout)
+    formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
     handler.setFormatter(formatter)
-
     logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
     return logger
 
+def main_processing_loop(items: list):
+    log = setup_stream_handler("automation-tool-14")
+    guard = InputGuard(log)
+    
+    for item in items:
+        clean_data = guard.validate(item, lambda x: isinstance(x, int) and x > 0)
+        if clean_data is not None:
+            log.info(f"Processing verified input: {clean_data}")
+        else:
+            log.warning("Skipping corrupted payload from input stream")
+
 if __name__ == '__main__':
-    log = setup_logger()
-    log.debug('This is a debug message')
-    log.info('This is an info message')
-    log.warning('This is a warning message')
-    log.error('This is an error message')
-    log.critical('This is a critical message')
+    main_processing_loop([10, -5, "garbage", 42])
