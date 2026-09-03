@@ -1,56 +1,31 @@
 import json
-import time
+from typing import Any, Dict, List, Union
 from functools import reduce
-from typing import Any, Callable, Dict, List
 
-def get_nested(data: Dict[str, Any], path: str, default: Any = None) -> Any:
-    keys = path.split('.')
+def deep_extract(data: Union[Dict, List], path: str, default: Any = None) -> Any:
+    """
+    traverses nested structures using dot-notation string paths
+    e.g. 'users.0.name'
+    """
     try:
-        return reduce(lambda d, k: d.get(k) if isinstance(d, dict) else None, keys, data)
-    except Exception:
+        return reduce(lambda d, k: d[int(k)] if isinstance(d, list) else d.get(k), path.split('.'), data)
+    except (KeyError, IndexError, TypeError, ValueError):
         return default
 
-def safe_call(func: Callable[[Any], Any], *args: Any, **kwargs: Any) -> Any:
-    try:
-        return func(*args, **kwargs)
-    except Exception as exc:
-        return {"success": False, "error": str(exc)}
+def serialize_with_magic(obj: Any) -> str:
+    """
+    custom serialization that handles non-standard object attributes
+    """
+    def _magic(o: Any) -> Any:
+        if hasattr(o, '__dict__'):
+            return {k: _magic(v) for k, v in o.__dict__.items() if not k.startswith('_')}
+        if isinstance(o, (list, tuple)):
+            return [_magic(i) for i in o]
+        return o
+    return json.dumps(_magic(obj), indent=2)
 
-def chunked(iterable: List[Any], size: int) -> List[List[Any]]:
-    return [iterable[i:i + size] for i in range(0, len(iterable), size)]
-
-def stack_flatten(nested: List[Any]) -> List[Any]:
-    stack = list(nested)
-    result = []
-    while stack:
-        current = stack.pop()
-        if isinstance(current, list):
-            stack.extend(current)
-        else:
-            result.append(current)
-    return result[::-1]
-
-def merge_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
-    result = {}
-    for config in configs:
-        for key, value in config.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = merge_configs(result[key], value)
-            else:
-                result[key] = value
-    return result
-
-def format_data(data: Any) -> str:
-    if isinstance(data, (dict, list)):
-        return json.dumps(data, indent=2, sort_keys=True)
-    return str(data)
-
-def retry_operation(operation: Callable[[], Any], attempts: int = 3, backoff: float = 0.5) -> Any:
-    for attempt in range(attempts):
-        try:
-            return operation()
-        except Exception:
-            if attempt == attempts - 1:
-                raise
-            time.sleep(backoff * (attempt + 1))
-    return None
+def sanitize_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    filters out keys containing nulls or empty strings
+    """
+    return {k: v for k, v in payload.items() if v is not None and v != ""}
