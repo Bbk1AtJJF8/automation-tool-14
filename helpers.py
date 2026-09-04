@@ -1,26 +1,31 @@
-def validate_input(data):
-    if not isinstance(data, (int, float)):
-        raise ValueError('Input must be a number')
-    if data < 0:
-        raise ValueError('Input must be non-negative')
+import functools
+from typing import Any, Callable, Dict
 
-class ProcessingLoop:
-    def __init__(self):
-        self.results = []
+def validate_payload(schema: Dict[str, type]):
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            data = args[0] if args else kwargs.get('data')
+            if not isinstance(data, dict):
+                raise ValueError(f"payload must be dict, got {type(data).__name__}")
+            for key, expected_type in schema.items():
+                if key not in data:
+                    raise KeyError(f"missing required field: {key}")
+                if not isinstance(data[key], expected_type):
+                    raise TypeError(f"field {key} expects {expected_type}, got {type(data[key])}")
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
-    def main_loop(self, inputs):
-        for item in inputs:
-            try:
-                validate_input(item)
-                self.results.append(self.process(item))
-            except ValueError as e:
-                print(f'Input error: {e}')
+def process_stream(items: list, validator: Callable):
+    processed = []
+    for item in items:
+        try:
+            processed.append(validator(item))
+        except (ValueError, TypeError, KeyError) as e:
+            print(f"skip item due to {type(e).__name__}: {e}")
+    return processed
 
-    def process(self, value):
-        return value ** 2  # Example processing: squaring the input
-
-if __name__ == '__main__':
-    loop = ProcessingLoop()
-    inputs = [1, 2, 3, -4, 'five']
-    loop.main_loop(inputs)
-    print(loop.results)
+@validate_payload({'id': int, 'task': str})
+def run_task(data: dict):
+    return f"executing {data['task']} (ID: {data['id']})"
