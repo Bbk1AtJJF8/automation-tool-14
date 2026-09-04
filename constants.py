@@ -1,60 +1,40 @@
-import time
-import json
-from datetime import datetime
-from typing import Any, Callable, List
+import os
+from enum import Enum
+from pathlib import Path
 
-MAX_RETRIES = 3
-DEFAULT_TIMEOUT = 30
-BATCH_SIZE = 50
-LOG_LEVELS = ["DEBUG", "INFO", "WARNING", "ERROR"]
-OPERATION_MODES = ["sequential", "parallel", "batch"]
+class AppMode(Enum):
+    DEVELOPMENT = 'dev'
+    STAGING = 'stage'
+    PRODUCTION = 'prod'
 
-def get_constant(key: str) -> Any:
-    constants = {"max_retries": MAX_RETRIES, "timeout": DEFAULT_TIMEOUT, "batch_size": BATCH_SIZE, "log_levels": LOG_LEVELS, "modes": OPERATION_MODES}
-    return constants.get(key)
+class PathConfig:
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    LOG_DIR = BASE_DIR / 'logs'
+    DATA_DIR = BASE_DIR / 'data'
 
-def retry_with_backoff(func: Callable, *args: Any, **kwargs: Any) -> Any:
-    retries = get_constant("max_retries")
-    for i in range(retries):
-        try:
-            return func(*args, **kwargs)
-        except Exception:
-            if i == retries - 1:
-                raise
-            time.sleep(0.1 * (2 ** i))
-    return None
+    @classmethod
+    def ensure_directories(cls):
+        for directory in [cls.LOG_DIR, cls.DATA_DIR]:
+            directory.mkdir(parents=True, exist_ok=True)
 
-def batch_execute(items: List[Any], action: Callable[[Any], Any]) -> List[Any]:
-    size = get_constant("batch_size")
-    results = []
-    for start in range(0, len(items), size):
-        end = start + size
-        batch = items[start:end]
-        results += [action(item) for item in batch]
-    return results
+class AppConstants:
+    APP_NAME = 'automation-tool-14'
+    VERSION = '1.0.4'
+    ENV = os.getenv('APP_ENV', AppMode.DEVELOPMENT.value)
+    RETRY_LIMIT = 3
+    TIMEOUT = 30
+    
+    # Mapping for unusual file extension processing
+    SUPPORTED_EXTENSIONS = {
+        '.json': 'json_parser',
+        '.yml': 'yaml_parser',
+        '.tmp': 'temp_cleanup',
+    }
 
-def log_message(level: str, msg: str) -> None:
-    if level in get_constant("log_levels"):
-        ts = datetime.now().strftime("%H:%M:%S")
-        print(f"{ts} [{level}] {msg}")
-
-def is_valid_mode(mode: str) -> bool:
-    return mode in get_constant("modes")
-
-def generate_handler(op_type: str) -> Callable:
-    def inner(val: Any) -> Any:
-        if op_type == "process":
-            return val * 2 if isinstance(val, (int, float)) else str(val)
-        elif op_type == "validate":
-            return bool(val)
-        return val
-    return inner
-
-def export_constants(path: str) -> None:
-    data = {"MAX_RETRIES": MAX_RETRIES, "DEFAULT_TIMEOUT": DEFAULT_TIMEOUT, "BATCH_SIZE": BATCH_SIZE, "LOG_LEVELS": LOG_LEVELS, "OPERATION_MODES": OPERATION_MODES}
-    with open(path, "w") as file:
-        json.dump(data, file, indent=2)
-
-def safe_get_constant(key: str, default: Any = None) -> Any:
-    val = get_constant(key)
-    return val if val is not None else default
+    @staticmethod
+    def get_config_map():
+        return {
+            'name': AppConstants.APP_NAME,
+            'version': AppConstants.VERSION,
+            'environment': AppConstants.ENV
+        }
