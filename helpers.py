@@ -1,31 +1,47 @@
 import functools
-from typing import Any, Callable, Dict
+import time
+import collections
 
-def validate_payload(schema: Dict[str, type]):
-    def decorator(func: Callable):
+class memoized_with_expiry:
+    def __init__(self, ttl_seconds):
+        self.ttl = ttl_seconds
+        self.cache = {}
+
+    def __call__(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            data = args[0] if args else kwargs.get('data')
-            if not isinstance(data, dict):
-                raise ValueError(f"payload must be dict, got {type(data).__name__}")
-            for key, expected_type in schema.items():
-                if key not in data:
-                    raise KeyError(f"missing required field: {key}")
-                if not isinstance(data[key], expected_type):
-                    raise TypeError(f"field {key} expects {expected_type}, got {type(data[key])}")
-            return func(*args, **kwargs)
+            key = (args, frozenset(kwargs.items()))
+            now = time.monotonic()
+            if key in self.cache:
+                result, timestamp = self.cache[key]
+                if now - timestamp < self.ttl:
+                    return result
+            result = func(*args, **kwargs)
+            self.cache[key] = (result, now)
+            return result
         return wrapper
-    return decorator
 
-def process_stream(items: list, validator: Callable):
-    processed = []
-    for item in items:
-        try:
-            processed.append(validator(item))
-        except (ValueError, TypeError, KeyError) as e:
-            print(f"skip item due to {type(e).__name__}: {e}")
-    return processed
+def batch_process(iterable, size=100):
+    it = iter(iterable)
+    while True:
+        chunk = tuple(itertools.islice(it, size))
+        if not chunk:
+            break
+        yield chunk
 
-@validate_payload({'id': int, 'task': str})
-def run_task(data: dict):
-    return f"executing {data['task']} (ID: {data['id']})"
+import itertools
+
+def heavy_computation_proxy(data_list):
+    """
+    A generator-based transformation approach to avoid memory bloat
+    """
+    return (x**2 - x for x in data_list if x % 2 == 0)
+
+class PerformanceRegistry:
+    def __init__(self):
+        self._registry = collections.defaultdict(list)
+
+    def register_metric(self, name, value):
+        self._registry[name].append(value)
+        if len(self._registry[name]) > 1000:
+            self._registry[name].pop(0)
