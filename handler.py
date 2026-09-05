@@ -1,54 +1,38 @@
+import functools
 import time
-import random
-from collections import deque
+import collections
 
-class Handler:
-    def __init__(self):
-        self.task_queue = deque()
-        self.completed = []
+class LRUDispatcher:
+    def __init__(self, capacity=128):
+        self.cache = collections.OrderedDict()
+        self.capacity = capacity
 
-    def add_task(self, task_type, **kwargs):
-        self.task_queue.append((task_type, kwargs))
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, tuple(sorted(kwargs.items())))
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            result = func(*args, **kwargs)
+            self.cache[key] = result
+            self.cache.move_to_end(key)
+            if len(self.cache) > self.capacity:
+                self.cache.popitem(last=False)
+            return result
+        return wrapper
 
-    def execute_all(self):
-        while self.task_queue:
-            task_type, params = self.task_queue.popleft()
-            outcome = self._handle_task(task_type, params)
-            self.completed.append(outcome)
+cache_layer = LRUDispatcher(capacity=256)
 
-    def _handle_task(self, task_type, params):
-        if task_type == "simulate_work":
-            duration = params.get("duration", 1)
-            time.sleep(duration)
-            return {"type": task_type, "status": "done", "duration": duration}
+@cache_layer
+def execute_task(payload):
+    # Simulate intensive computational overhead
+    start_time = time.perf_counter()
+    result = sum(i * i for i in range(10**6))
+    return {"status": "success", "data": result, "duration": time.perf_counter() - start_time}
 
-        elif task_type == "generate_data":
-            count = params.get("count", 3)
-            data = [random.randint(1, 100) for _ in range(count)]
-            return {"type": task_type, "status": "done", "data": data}
-
-        elif task_type == "random_delay":
-            delay = random.uniform(0.2, 1.0)
-            time.sleep(delay)
-            return {"type": task_type, "status": "done", "actual_delay": delay}
-
-        else:
-            return {"type": task_type, "status": "unknown"}
-
-    def get_summary(self):
-        return {
-            "total": len(self.completed),
-            "tasks": self.completed
-        }
-
-def create_default_handler():
-    handler = Handler()
-    handler.add_task("simulate_work", duration=0.5)
-    handler.add_task("generate_data", count=5)
-    handler.add_task("random_delay")
-    return handler
-
-def run_automation():
-    handler = create_default_handler()
-    handler.execute_all()
-    return handler.get_summary()
+def process_request(data):
+    results = []
+    for item in data:
+        results.append(execute_task(item))
+    return results
