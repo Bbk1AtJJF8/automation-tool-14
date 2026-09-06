@@ -1,29 +1,28 @@
 import re
+import socket
 from typing import Any, Optional
 
-class DataSanitizer:
-    def __init__(self):
-        self._patterns = {
-            'email': re.compile(r'^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$', re.I),
-            'identifier': re.compile(r'^[a-zA-Z_][a-zA-Z0-9_]{3,31}$')
-        }
+def is_valid_email(email: str) -> bool:
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return bool(re.match(pattern, email))
 
-    def validate(self, key: str, value: Any) -> bool:
-        if key not in self._patterns:
-            return True
-        return bool(self._patterns[key].match(str(value)))
+def is_valid_port(port: Any) -> bool:
+    try:
+        return 1 <= int(port) <= 65535
+    except (ValueError, TypeError):
+        return False
 
-def sanitize_input(data: dict) -> dict:
-    sanitizer = DataSanitizer()
-    return {k: v for k, v in data.items() if sanitizer.validate(k, v)}
+def is_port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(1)
+        return s.connect_ex((host, port)) == 0
 
-class ValidationError(Exception):
-    pass
+def sanitize_path(path: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9_/.-]', '', path).lstrip('/')
 
-def check_structure(data: dict, schema: list) -> None:
-    missing = [field for field in schema if field not in data]
-    if missing:
-        raise ValidationError(f"Missing required fields: {', '.join(missing)}")
+def validate_json_schema(data: dict, keys: list) -> bool:
+    return all(k in data for k in keys)
 
-def normalize_string(value: Optional[str]) -> str:
-    return str(value or '').strip().lower()
+def coerce_boolean(value: Any) -> bool:
+    if isinstance(value, bool): return value
+    return str(value).lower() in ('true', '1', 't', 'y', 'yes')
