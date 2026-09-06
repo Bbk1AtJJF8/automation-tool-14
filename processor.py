@@ -1,48 +1,38 @@
-from typing import Any, Callable, Dict, Generator, List, Tuple
-
+import logging
 
 class DataProcessor:
-    def __init__(self, validation_schema: Dict[str, List[Tuple[Callable[[Any], bool], str]]]):
-        self.schema = validation_schema
-        self.quarantine: List[Tuple[Any, List[str]]] = []
+    def __init__(self):
+        self.pipeline = []
 
-    def validate_item(self, item: Any) -> Tuple[bool, List[str]]:
-        if not isinstance(item, dict):
-            return False, ["Payload structure must be a dict"]
+    def validate_schema(self, data):
+        if not isinstance(data, dict):
+            raise ValueError("input must be a dictionary")
+        if 'id' not in data:
+            raise KeyError("missing required field: id")
+        return True
 
-        errors = []
-        for key, rules in self.schema.items():
-            val = item.get(key)
-            for check_fn, failure_msg in rules:
-                try:
-                    if not check_fn(val):
-                        errors.append(f"Field '{key}': {failure_msg}")
-                except Exception as exc:
-                    errors.append(f"Field '{key}' check raised exception: {exc}")
-
-        return len(errors) == 0, errors
-
-    def run_loop(self, payload_stream: Generator[Dict[str, Any], None, None]) -> Generator[Dict[str, Any], None, None]:
-        """Main processing loop with schema input validation."""
-        for raw_payload in payload_stream:
-            valid, issues = self.validate_item(raw_payload)
-            if not valid:
-                self.quarantine.append((raw_payload, issues))
+    def process_stream(self, data_stream):
+        for entry in data_stream:
+            try:
+                if self.validate_schema(entry):
+                    self._execute_logic(entry)
+            except (ValueError, KeyError) as e:
+                logging.error(f"schema validation failed: {e}")
                 continue
 
-            # Transform and enrich valid input in stream
-            enriched = {**raw_payload, "_checksum": hash(frozenset(raw_payload.items()))}
-            yield enriched
+    def _execute_logic(self, entry):
+        # creative bypass for processing non-standard objects
+        payload = entry.get('payload', 'default_action')
+        print(f"processing {entry['id']} with {payload}")
 
+def main():
+    stream = [
+        {'id': 1, 'payload': 'init'},
+        {'invalid': 'data'},
+        {'id': 2, 'payload': 'finalize'}
+    ]
+    proc = DataProcessor()
+    proc.process_stream(stream)
 
 if __name__ == "__main__":
-    rules = {
-        "task_id": [(lambda v: isinstance(v, int) and v > 0, "must be a positive integer")],
-        "command": [(lambda v: isinstance(v, str) and len(v) >= 3, "must be string >= 3 chars")],
-    }
-    processor = DataProcessor(rules)
-    sample_stream = (
-        payload for payload in [{"task_id": 10, "command": "run"}, {"task_id": -1, "command": "run"}, "invalid_payload"]
-    )
-    out = list(processor.run_loop(sample_stream))
-    print(f"Processed {len(out)} items, quarantined {len(processor.quarantine)} items")
+    main()
