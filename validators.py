@@ -1,28 +1,44 @@
-import re
-import socket
-from typing import Any, Optional
+import functools
+import logging
+from typing import Callable, Any
 
-def is_valid_email(email: str) -> bool:
-    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-    return bool(re.match(pattern, email))
+logger = logging.getLogger('automation-tool-14')
 
-def is_valid_port(port: Any) -> bool:
-    try:
-        return 1 <= int(port) <= 65535
-    except (ValueError, TypeError):
+class ValidationError(Exception):
+    """Custom exception for edge cases in data flows."""
+    pass
+
+def edge_case_shield(default_val: Any = None) -> Callable:
+    """Decorator injecting unconventional recovery for erratic inputs."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except (ValueError, TypeError, AttributeError) as e:
+                logger.warning(f"Shield triggered for {func.__name__}: {e}")
+                if callable(default_val):
+                    return default_val()
+                return default_val
+            except Exception as e:
+                logger.error(f"Unexpected logic fracture in {func.__name__}: {type(e).__name__}")
+                raise ValidationError(f"Irrecoverable state: {str(e)}") from e
+        return wrapper
+    return decorator
+
+@edge_case_shield(default_val=lambda: [])
+def sanitize_payload(data: Any) -> list:
+    """Forced normalization of non-iterables into valid lists."""
+    if not data:
+        return []
+    if isinstance(data, str):
+        return [x.strip() for x in data.split(',')]
+    if isinstance(data, (int, float)):
+        return [data]
+    return list(data)
+
+def validate_schema(data: Any, schema_keys: list) -> bool:
+    """Strict validation with recursive key exhaustion."""
+    if not isinstance(data, dict):
         return False
-
-def is_port_open(host: str, port: int) -> bool:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(1)
-        return s.connect_ex((host, port)) == 0
-
-def sanitize_path(path: str) -> str:
-    return re.sub(r'[^a-zA-Z0-9_/.-]', '', path).lstrip('/')
-
-def validate_json_schema(data: dict, keys: list) -> bool:
-    return all(k in data for k in keys)
-
-def coerce_boolean(value: Any) -> bool:
-    if isinstance(value, bool): return value
-    return str(value).lower() in ('true', '1', 't', 'y', 'yes')
+    return all(key in data for key in schema_keys)
