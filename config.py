@@ -1,32 +1,57 @@
 import os
+import json
 from typing import Any, Dict
 
-class ConfigLoader:
-    """A magical box that conjures config from thin air or defaults."""
-    def __init__(self, defaults: Dict[str, Any] = None):
-        self._data = defaults or {}
-        self._load_from_env()
+class ConfigNode:
+    def __init__(self, data: Dict[str, Any], defaults: Dict[str, Any], prefix: str = "AUTO_"):
+        self._data = data or {}
+        self._defaults = defaults or {}
+        self._prefix = prefix
+        self._cache = {}
 
-    def _load_from_env(self) -> None:
-        for key in self._data.keys():
-            env_val = os.getenv(key.upper())
-            if env_val is not None:
-                self._data[key] = type(self._data[key])(env_val)
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith('_'):
+            raise AttributeError(name)
+        if name in self._cache:
+            return self._cache[name]
 
-    def __getitem__(self, key: str) -> Any:
-        return self._data[key]
+        env_key = f"{self._prefix}{name.upper()}"
+        env_val = os.environ.get(env_key)
+        
+        raw_val = env_val if env_val is not None else self._data.get(name)
+        fallback = self._defaults.get(name)
 
-    def get(self, key: str, default: Any = None) -> Any:
-        return self._data.get(key, default)
+        if isinstance(raw_val, dict) or isinstance(fallback, dict):
+            merged_data = {**(fallback or {}), **(raw_val or {})}
+            resolved = ConfigNode(merged_data, fallback or {}, prefix=f"{env_key}_")
+        elif raw_val is not None:
+            if isinstance(raw_val, str) and raw_val.lower() in ('true', 'false'):
+                resolved = raw_val.lower() == 'true'
+            elif isinstance(raw_val, str) and raw_val.isdigit():
+                resolved = int(raw_val)
+            else:
+                resolved = raw_val
+        else:
+            resolved = fallback
 
-def load_app_config() -> ConfigLoader:
-    base_settings = {
-        "port": 8080,
-        "debug": False,
-        "db_url": "sqlite:///:memory:"
+        self._cache[name] = resolved
+        return resolved
+
+DEFAULTS = {
+    "timeout": 45,
+    "max_retries": 5,
+    "agent_name": "auto-bot-14",
+    "features": {
+        "auto_clean": True,
+        "verbose": False
     }
-    return ConfigLoader(base_settings)
+}
 
-if __name__ == "__main__":
-    cfg = load_app_config()
-    print(f"Active port: {cfg['port']}")
+class Configuration(ConfigNode):
+    def __init__(self, filepath: str = "config.json"):
+        data = {}
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'r') as f:
+                    data = json.load(f)
+            except
