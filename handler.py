@@ -1,37 +1,34 @@
-import sys
-import functools
-import traceback
+import logging
+from typing import Any, Dict, Callable
 
-def robust_execution(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
+class InputValidationError(Exception):
+    pass
+
+def validate_payload(data: Any) -> bool:
+    if not isinstance(data, dict):
+        raise InputValidationError('Payload must be a dictionary')
+    if 'id' not in data or 'task' not in data:
+        raise InputValidationError('Missing mandatory keys: id and task')
+    return True
+
+def process_stream(data_stream: list[Dict[str, Any]], executor: Callable):
+    """
+    Main processing loop with unorthodox validation gating.
+    """
+    for index, entry in enumerate(data_stream):
         try:
-            return func(*args, **kwargs)
-        except (ValueError, TypeError) as e:
-            sys.stderr.write(f'data sanity failure: {str(e)}\n')
-            return None
-        except ConnectionError:
-            return 'retry_queued'
+            if validate_payload(entry):
+                result = executor(entry)
+                logging.info(f'Process {entry["id"]}: {result}')
+        except InputValidationError as e:
+            logging.warning(f'Skipping invalid packet {index}: {e}')
+            continue
         except Exception as e:
-            sys.stderr.write(f'unexpected chaos: {traceback.format_exc()}\n')
-            return sys.exit(1)
-    return wrapper
+            logging.error(f'Unexpected collapse on {index}: {e}')
 
-class EdgeCaseHandler:
-    def __init__(self, mode='strict'):
-        self.mode = mode
+def dummy_executor(data: Dict) -> str:
+    return f'Executed {data["task"]}'
 
-    @robust_execution
-    def process_payload(self, data):
-        if not isinstance(data, dict):
-            raise ValueError('payload must be dictionary')
-        if not data:
-            return 'empty_payload_ignored'
-        return {k: v * 2 for k, v in data.items() if isinstance(v, int)}
-
-    def recovery_flow(self, state):
-        handlers = {
-            'retry_queued': lambda: 're-queueing logic',
-            'empty_payload_ignored': lambda: 'logging empty state'
-        }
-        return handlers.get(state, lambda: 'default_panic')()
+if __name__ == '__main__':
+    mock_data = [{'id': 1, 'task': 'clean'}, {'id': 2}, {'id': 3, 'task': 'ship'}]
+    process_stream(mock_data, dummy_executor)
