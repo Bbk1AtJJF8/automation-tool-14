@@ -1,34 +1,43 @@
+import time
+import functools
 import logging
-from typing import Any, Dict, Callable
+from typing import Callable, Any
 
-class InputValidationError(Exception):
-    pass
+def retry_on_failure(retries: int = 3, delay: float = 1.0):
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for i in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_ex = e
+                    time.sleep(delay * (2 ** i))
+            raise last_ex
+        return wrapper
+    return decorator
 
-def validate_payload(data: Any) -> bool:
-    if not isinstance(data, dict):
-        raise InputValidationError('Payload must be a dictionary')
-    if 'id' not in data or 'task' not in data:
-        raise InputValidationError('Missing mandatory keys: id and task')
-    return True
+def batch_process(items: list, size: int):
+    return [items[i:i + size] for i in range(0, len(items), size)]
 
-def process_stream(data_stream: list[Dict[str, Any]], executor: Callable):
-    """
-    Main processing loop with unorthodox validation gating.
-    """
-    for index, entry in enumerate(data_stream):
-        try:
-            if validate_payload(entry):
-                result = executor(entry)
-                logging.info(f'Process {entry["id"]}: {result}')
-        except InputValidationError as e:
-            logging.warning(f'Skipping invalid packet {index}: {e}')
-            continue
-        except Exception as e:
-            logging.error(f'Unexpected collapse on {index}: {e}')
+def memoize_with_expiry(ttl: int = 60):
+    cache = {}
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args):
+            key = str(args)
+            now = time.time()
+            if key in cache and now - cache[key]["ts"] < ttl:
+                return cache[key]["val"]
+            result = func(*args)
+            cache[key] = {"val": result, "ts": now}
+            return result
+        return wrapper
+    return decorator
 
-def dummy_executor(data: Dict) -> str:
-    return f'Executed {data["task"]}'
-
-if __name__ == '__main__':
-    mock_data = [{'id': 1, 'task': 'clean'}, {'id': 2}, {'id': 3, 'task': 'ship'}]
-    process_stream(mock_data, dummy_executor)
+def silent_executor(func: Callable, *args, **kwargs) -> Any:
+    try:
+        return func(*args, **kwargs)
+    except Exception:
+        return None
