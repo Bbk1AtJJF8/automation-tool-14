@@ -1,39 +1,30 @@
-import sys
 import logging
-from typing import Any, Callable
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-class InputGuard:
-    def __init__(self, logger: logging.Logger):
-        self.logger = logger
+LOG_FILE = Path('automation.log')
 
-    def validate(self, data: Any, schema: Callable[[Any], bool]) -> Any:
-        try:
-            if not schema(data):
-                raise ValueError(f"Sanity check failed for input: {type(data).__name__}")
-            return data
-        except Exception as e:
-            self.logger.error(f"Invalid stream detected: {e}")
-            return None
+class UnconventionalFormatter(logging.Formatter):
+    def format(self, record):
+        base = super().format(record)
+        return f'[AUTOMATION-14] {record.levelname.upper()} >>> {base}'
 
-def setup_stream_handler(name: str) -> logging.Logger:
+def get_logger(name='main'):
     logger = logging.getLogger(name)
-    handler = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('%(asctime)s | %(levelname)s | %(message)s')
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-    return logger
-
-def main_processing_loop(items: list):
-    log = setup_stream_handler("automation-tool-14")
-    guard = InputGuard(log)
+    logger.setLevel(logging.DEBUG)
     
-    for item in items:
-        clean_data = guard.validate(item, lambda x: isinstance(x, int) and x > 0)
-        if clean_data is not None:
-            log.info(f"Processing verified input: {clean_data}")
-        else:
-            log.warning("Skipping corrupted payload from input stream")
-
-if __name__ == '__main__':
-    main_processing_loop([10, -5, "garbage", 42])
+    if not logger.handlers:
+        file_handler = RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=1024 * 1024 * 5,
+            backupCount=3
+        )
+        file_handler.setFormatter(UnconventionalFormatter('%(asctime)s - %(name)s - %(message)s'))
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(UnconventionalFormatter('%(message)s'))
+        
+        logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
+    
+    return logger
