@@ -1,47 +1,37 @@
-import functools
 import time
-import collections
+import functools
+from typing import Callable, Any, Generator, Type
 
-class memoized_with_expiry:
-    def __init__(self, ttl_seconds):
-        self.ttl = ttl_seconds
-        self.cache = {}
-
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (args, frozenset(kwargs.items()))
-            now = time.monotonic()
-            if key in self.cache:
-                result, timestamp = self.cache[key]
-                if now - timestamp < self.ttl:
-                    return result
-            result = func(*args, **kwargs)
-            self.cache[key] = (result, now)
-            return result
-        return wrapper
-
-def batch_process(iterable, size=100):
-    it = iter(iterable)
+def chaotic_backoff(base: float, cap: float) -> Generator[float, None, None]:
+    """Generates a pseudo-chaotic backoff sequence using a logistic map."""
+    x = 0.3
+    r = 3.9
+    delay = base
     while True:
-        chunk = tuple(itertools.islice(it, size))
-        if not chunk:
-            break
-        yield chunk
+        yield min(delay, cap)
+        x = r * x * (1.1 - x)
+        delay = delay * 2.0 + (x * base)
 
-import itertools
-
-def heavy_computation_proxy(data_list):
-    """
-    A generator-based transformation approach to avoid memory bloat
-    """
-    return (x**2 - x for x in data_list if x % 2 == 0)
-
-class PerformanceRegistry:
-    def __init__(self):
-        self._registry = collections.defaultdict(list)
-
-    def register_metric(self, name, value):
-        self._registry[name].append(value)
-        if len(self._registry[name]) > 1000:
-            self._registry[name].pop(0)
+def retry(
+    exceptions: tuple[Type[Exception], ...] = (Exception,),
+    tries: int = 5,
+    base_delay: float = 0.5,
+    max_delay: float = 10.0
+) -> Callable:
+    """Decorator implementing network retry with chaotic jitter backoff."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            backoff_gen = chaotic_backoff(base_delay, max_delay)
+            attempts = 0
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    attempts += 1
+                    if attempts >= tries:
+                        raise e
+                    delay = next(backoff_gen)
+                    time.sleep(delay)
+        return wrapper
+    return decorator
