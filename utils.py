@@ -1,37 +1,73 @@
-import time
-import functools
-import random
+import json
+from datetime import datetime
+from typing import Any, Union, List
 
-def retry_operation(max_attempts=3, backoff_factor=1.0):
-    """Higher-order function decorator for transient network failures."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
+class DeepGrabber:
+    """
+    An unusual helper to extract deeply nested keys or attributes
+    using the matrix multiplication '@' operator.
+    
+    Example:
+        data = {'users': [{'profile': {'name': 'Alice'}}]}
+        name = DeepGrabber(data) @ 'users.0.profile.name'
+    """
+    def __init__(self, target: Any):
+        self.target = target
+
+    def __matmul__(self, path: str) -> Any:
+        parts = path.split('.')
+        current = self.target
+        for part in parts:
+            if current is None:
+                return None
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, (list, tuple)):
                 try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts == max_attempts:
-                        raise e
-                    sleep_time = backoff_factor * (2 ** (attempts - 1)) + random.uniform(0, 0.1)
-                    time.sleep(sleep_time)
-            return None
-        return wrapper
-    return decorator
+                    idx = int(part)
+                    current = current[idx]
+                except (ValueError, IndexError):
+                    return None
+            else:
+                current = getattr(current, part, None)
+        return current
 
-class NetworkCircuit:
-    """Alternative stateful retry wrapper using a persistent call context."""
-    def __init__(self, limit=3):
-        self.limit = limit
 
-    def execute(self, task, *args, **kwargs):
-        for i in range(self.limit):
-            try:
-                return task(*args, **kwargs)
-            except Exception as e:
-                if i == self.limit - 1:
-                    raise
-                time.sleep(0.5 * (i + 1))
+def auto_parse(value: str) -> Any:
+    """
+    Heuristically parse input string into native Python types
+    including bool, float, int, JSON structures, or datetimes.
+    """
+    if not isinstance(value, str):
+        return value
+    
+    normalized = value.strip()
+    if normalized.lower() == 'true':
+        return True
+    if normalized.lower() == 'false':
+        return False
+    if normalized.lower() in ('none', 'null', ''):
         return None
+
+    try:
+        if '.' in normalized:
+            return float(normalized)
+        return int(normalized)
+    except ValueError:
+        pass
+
+    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%H:%M:%S'):
+        try:
+            return datetime.strptime(normalized, fmt)
+        except ValueError:
+            pass
+
+    if (normalized.startswith('{') and normalized.endswith('}')) or (
+        normalized.startswith('[') and normalized.endswith(']')
+    ):
+        try:
+            return json.loads(normalized)
+        except json.JSONDecodeError:
+            pass
+
+    return value
