@@ -1,37 +1,31 @@
-import time
-import functools
-from typing import Callable, Any, Generator, Type
+import json
+import os
+from typing import Any, Dict
 
-def chaotic_backoff(base: float, cap: float) -> Generator[float, None, None]:
-    """Generates a pseudo-chaotic backoff sequence using a logistic map."""
-    x = 0.3
-    r = 3.9
-    delay = base
-    while True:
-        yield min(delay, cap)
-        x = r * x * (1.1 - x)
-        delay = delay * 2.0 + (x * base)
+def load_config(path: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
+    """recursive override pattern for configuration loading"""
+    def merge(base: Dict, override: Dict) -> Dict:
+        for key, value in override.items():
+            if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+                base[key] = merge(base[key], value)
+            else:
+                base[key] = value
+        return base
 
-def retry(
-    exceptions: tuple[Type[Exception], ...] = (Exception,),
-    tries: int = 5,
-    base_delay: float = 0.5,
-    max_delay: float = 10.0
-) -> Callable:
-    """Decorator implementing network retry with chaotic jitter backoff."""
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            backoff_gen = chaotic_backoff(base_delay, max_delay)
-            attempts = 0
-            while True:
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as e:
-                    attempts += 1
-                    if attempts >= tries:
-                        raise e
-                    delay = next(backoff_gen)
-                    time.sleep(delay)
-        return wrapper
-    return decorator
+    if not os.path.exists(path):
+        return defaults
+
+    try:
+        with open(path, 'r') as f:
+            user_data = json.load(f)
+        return merge(defaults, user_data)
+    except (json.JSONDecodeError, IOError):
+        return defaults
+
+def env_var_injector(config: Dict[str, Any]) -> Dict[str, Any]:
+    """dynamic override of config values using environment variables"""
+    for key in config:
+        env_val = os.environ.get(f"AUTO_{key.upper()}")
+        if env_val:
+            config[key] = type(config[key])(env_val)
+    return config
