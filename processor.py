@@ -1,17 +1,33 @@
-import typing
+import functools
+from typing import Any, Callable, Dict
 
-class Validator:
-    def __init__(self, check_fn: typing.Callable[[typing.Any], bool], error_msg: str):
-        self.check_fn = check_fn
-        self.error_msg = error_msg
+class DataProcessor:
+    def __init__(self, registry: Dict[str, Callable] = None):
+        self._registry = registry or {}
 
-    def __and__(self, other: 'Validator') -> 'Validator':
-        return Validator(
-            lambda x: self.check_fn(x) and other.check_fn(x),
-            f'{self.error_msg} and {other.error_msg}'
-        )
+    def register(self, task_name: str):
+        def decorator(func: Callable):
+            self._registry[task_name] = func
+            return func
+        return decorator
 
-    def __call__(self, val: typing.Any) -> bool:
-        try:
-            return self.check_fn(val)
-        except (KeyError, TypeError
+    def run_pipeline(self, pipeline: list, data: Any) -> Any:
+        return functools.reduce(lambda acc, task: self._registry[task](acc), pipeline, data)
+
+def sanitize(data: str) -> str:
+    return data.strip().lower()
+
+def normalize(data: str) -> str:
+    return "_".join(data.split())
+
+def initialize_processor() -> DataProcessor:
+    proc = DataProcessor()
+    proc.register('clean')(sanitize)
+    proc.register('norm')(normalize)
+    return proc
+
+if __name__ == '__main__':
+    engine = initialize_processor()
+    raw_input = "  Automation Tool 14  "
+    result = engine.run_pipeline(['clean', 'norm'], raw_input)
+    print(f'Processed: {result}')
