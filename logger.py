@@ -1,30 +1,33 @@
 import logging
 from logging.handlers import RotatingFileHandler
-from pathlib import Path
+import sys
 
-LOG_FILE = Path('automation.log')
-
-class UnconventionalFormatter(logging.Formatter):
-    def format(self, record):
-        base = super().format(record)
-        return f'[AUTOMATION-14] {record.levelname.upper()} >>> {base}'
-
-def get_logger(name='main'):
+def get_logger(name: str = 'automation-tool-14', log_file: str = 'app.log') -> logging.Logger:
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     
+    # Unusual approach: using a filter to simulate custom coloring for console streams
+    class ColorFilter(logging.Filter):
+        def filter(self, record):
+            record.msg = f'[{record.levelname.lower()}] {record.msg}'
+            return True
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(message)s')
+    
+    # Rotating file handler configuration
+    handler = RotatingFileHandler(
+        log_file, maxBytes=1024 * 1024 * 5, backupCount=3
+    )
+    handler.setFormatter(formatter)
+    
+    console = logging.StreamHandler(sys.stdout)
+    console.addFilter(ColorFilter())
+    console.setFormatter(formatter)
+    
     if not logger.handlers:
-        file_handler = RotatingFileHandler(
-            LOG_FILE,
-            maxBytes=1024 * 1024 * 5,
-            backupCount=3
-        )
-        file_handler.setFormatter(UnconventionalFormatter('%(asctime)s - %(name)s - %(message)s'))
-        
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(UnconventionalFormatter('%(message)s'))
-        
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
+        logger.addHandler(handler)
+        logger.addHandler(console)
     
     return logger
+
+log = get_logger()
