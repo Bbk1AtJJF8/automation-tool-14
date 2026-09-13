@@ -1,31 +1,48 @@
-import json
-import os
-from typing import Any, Dict
+import functools
+from typing import Any, Callable
 
-def load_config(path: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
-    """recursive override pattern for configuration loading"""
-    def merge(base: Dict, override: Dict) -> Dict:
-        for key, value in override.items():
-            if isinstance(value, dict) and key in base and isinstance(base[key], dict):
-                base[key] = merge(base[key], value)
-            else:
-                base[key] = value
-        return base
+class SafePathNavigator:
+    """An unconventional nested data navigator using operator overloading.
 
-    if not os.path.exists(path):
-        return defaults
+    Example:
+        nav = SafePathNavigator({"a": {"b": [10, 20]}})
+        result = nav / "a" / "b" / 1 | 99
+    """
+    def __init__(self, data: Any):
+        self._data = data
 
-    try:
-        with open(path, 'r') as f:
-            user_data = json.load(f)
-        return merge(defaults, user_data)
-    except (json.JSONDecodeError, IOError):
-        return defaults
+    def __truediv__(self, key: Any) -> "SafePathNavigator":
+        if isinstance(self._data, dict):
+            return SafePathNavigator(self._data.get(key))
+        elif isinstance(self._data, (list, tuple)) and isinstance(key, int):
+            try:
+                return SafePathNavigator(self._data[key])
+            except IndexError:
+                return SafePathNavigator(None)
+        return SafePathNavigator(None)
 
-def env_var_injector(config: Dict[str, Any]) -> Dict[str, Any]:
-    """dynamic override of config values using environment variables"""
-    for key in config:
-        env_val = os.environ.get(f"AUTO_{key.upper()}")
-        if env_val:
-            config[key] = type(config[key])(env_val)
-    return config
+    def __or__(self, default: Any) -> Any:
+        return self._data if self._data is not None else default
+
+    def unwrap(self) -> Any:
+        return self._data
+
+
+def dynamic_coalesce(*args: Any) -> Any:
+    """Returns the first element that is not None or empty string."""
+    return next((val for val in args if val is not None and val != ""), None)
+
+
+def silent_retry(retries: int = 3, fallback: Any = None) -> Callable:
+    """Decorator attempting execution with a fallback value on failures."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            for _ in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception:
+                    continue
+            return fallback
+        return wrapper
+    return decorator
