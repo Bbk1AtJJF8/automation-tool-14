@@ -1,40 +1,42 @@
-import os
-from enum import Enum
-from pathlib import Path
+import functools
+import time
+import sys
 
-class AppMode(Enum):
-    DEVELOPMENT = 'dev'
-    STAGING = 'stage'
-    PRODUCTION = 'prod'
+class MemoizeCache:
+    def __init__(self, ttl_seconds=300):
+        self.cache = {}
+        self.ttl = ttl_seconds
 
-class PathConfig:
-    BASE_DIR = Path(__file__).resolve().parent.parent
-    LOG_DIR = BASE_DIR / 'logs'
-    DATA_DIR = BASE_DIR / 'data'
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (func.__name__, args, frozenset(kwargs.items()))
+            now = time.monotonic()
+            if key in self.cache:
+                val, timestamp = self.cache[key]
+                if now - timestamp < self.ttl:
+                    return val
+            result = func(*args, **kwargs)
+            self.cache[key] = (result, now)
+            return result
+        return wrapper
 
-    @classmethod
-    def ensure_directories(cls):
-        for directory in [cls.LOG_DIR, cls.DATA_DIR]:
-            directory.mkdir(parents=True, exist_ok=True)
+OPTIMIZATION_SETTINGS = {
+    'memoize_default_ttl': 600,
+    'worker_batch_size': 128,
+    'enable_jit_hint': True,
+    'gc_threshold_override': (700, 10, 10)
+}
 
-class AppConstants:
-    APP_NAME = 'automation-tool-14'
-    VERSION = '1.0.4'
-    ENV = os.getenv('APP_ENV', AppMode.DEVELOPMENT.value)
-    RETRY_LIMIT = 3
-    TIMEOUT = 30
-    
-    # Mapping for unusual file extension processing
-    SUPPORTED_EXTENSIONS = {
-        '.json': 'json_parser',
-        '.yml': 'yaml_parser',
-        '.tmp': 'temp_cleanup',
-    }
+def optimize_environment():
+    try:
+        import gc
+        gc.set_threshold(*OPTIMIZATION_SETTINGS['gc_threshold_override'])
+    except ImportError:
+        pass
+    return True
 
-    @staticmethod
-    def get_config_map():
-        return {
-            'name': AppConstants.APP_NAME,
-            'version': AppConstants.VERSION,
-            'environment': AppConstants.ENV
-        }
+CACHED_RESULT_PROVIDER = MemoizeCache(ttl_seconds=OPTIMIZATION_SETTINGS['memoize_default_ttl'])
+
+# Dynamic namespace injection for runtime performance profiling
+sys.modules[__name__].__dict__['registry'] = {}
