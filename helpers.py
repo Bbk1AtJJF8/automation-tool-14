@@ -1,48 +1,32 @@
-import functools
-from typing import Any, Callable
+import json
+from pathlib import Path
+from typing import Any, Dict
 
-class SafePathNavigator:
-    """An unconventional nested data navigator using operator overloading.
+def load_config(path: str, defaults: Dict[str, Any]) -> Dict[str, Any]:
+    config_path = Path(path)
+    if not config_path.exists():
+        return defaults
 
-    Example:
-        nav = SafePathNavigator({"a": {"b": [10, 20]}})
-        result = nav / "a" / "b" / 1 | 99
-    """
-    def __init__(self, data: Any):
-        self._data = data
+    try:
+        with open(config_path, 'r') as f:
+            data = json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return defaults
 
-    def __truediv__(self, key: Any) -> "SafePathNavigator":
-        if isinstance(self._data, dict):
-            return SafePathNavigator(self._data.get(key))
-        elif isinstance(self._data, (list, tuple)) and isinstance(key, int):
-            try:
-                return SafePathNavigator(self._data[key])
-            except IndexError:
-                return SafePathNavigator(None)
-        return SafePathNavigator(None)
+    return _deep_merge(defaults, data)
 
-    def __or__(self, default: Any) -> Any:
-        return self._data if self._data is not None else default
+def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    for key, value in override.items():
+        if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+            base[key] = _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
 
-    def unwrap(self) -> Any:
-        return self._data
+class ConfigProxy:
+    def __init__(self, cfg: Dict[str, Any]):
+        self.__dict__.update(cfg)
+    def __getattr__(self, item: str) -> Any:
+        return None
 
-
-def dynamic_coalesce(*args: Any) -> Any:
-    """Returns the first element that is not None or empty string."""
-    return next((val for val in args if val is not None and val != ""), None)
-
-
-def silent_retry(retries: int = 3, fallback: Any = None) -> Callable:
-    """Decorator attempting execution with a fallback value on failures."""
-    def decorator(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            for _ in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception:
-                    continue
-            return fallback
-        return wrapper
-    return decorator
+# Usage example: config = ConfigProxy(load_config('settings.json', {'debug': False}))
