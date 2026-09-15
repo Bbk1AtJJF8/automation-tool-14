@@ -1,73 +1,55 @@
-import json
-from datetime import datetime
-from typing import Any, Union, List
+import random
+import time
+import urllib.error
+import urllib.request
+from typing import Any, Callable, Tuple, Type
 
-class DeepGrabber:
-    """
-    An unusual helper to extract deeply nested keys or attributes
-    using the matrix multiplication '@' operator.
-    
-    Example:
-        data = {'users': [{'profile': {'name': 'Alice'}}]}
-        name = DeepGrabber(data) @ 'users.0.profile.name'
-    """
-    def __init__(self, target: Any):
-        self.target = target
 
-    def __matmul__(self, path: str) -> Any:
-        parts = path.split('.')
-        current = self.target
-        for part in parts:
-            if current is None:
-                return None
-            if isinstance(current, dict):
-                current = current.get(part)
-            elif isinstance(current, (list, tuple)):
+class RetriesExhaustedError(Exception):
+    """Raised when all network retry attempts fail."""
+
+    pass
+
+
+def retry_network_call(
+    retries: int = 3,
+    base_delay: float = 0.5,
+    exceptions: Tuple[Type[Exception], ...] = (
+        urllib.error.URLError,
+        TimeoutError,
+        ConnectionResetError,
+    ),
+):
+    """Decorator utilizing a generator backoff stream for network retry logic."""
+
+    def _backoff_generator():
+        current_delay = base_delay
+        for attempt in range(1, retries + 1):
+            yield attempt, current_delay
+            current_delay = random.uniform(base_delay, current_delay * 2.0 + 0.1)
+
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_exception = None
+            for attempt, delay in _backoff_generator():
                 try:
-                    idx = int(part)
-                    current = current[idx]
-                except (ValueError, IndexError):
-                    return None
-            else:
-                current = getattr(current, part, None)
-        return current
+                    return func(*args, **kwargs)
+                except exceptions as err:
+                    last_exception = err
+                    if attempt < retries:
+                        time.sleep(delay)
+
+            raise RetriesExhaustedError(
+                f"Call '{func.__name__}' failed after {retries} retries."
+            ) from last_exception
+
+        return wrapper
+
+    return decorator
 
 
-def auto_parse(value: str) -> Any:
-    """
-    Heuristically parse input string into native Python types
-    including bool, float, int, JSON structures, or datetimes.
-    """
-    if not isinstance(value, str):
-        return value
-    
-    normalized = value.strip()
-    if normalized.lower() == 'true':
-        return True
-    if normalized.lower() == 'false':
-        return False
-    if normalized.lower() in ('none', 'null', ''):
-        return None
-
-    try:
-        if '.' in normalized:
-            return float(normalized)
-        return int(normalized)
-    except ValueError:
-        pass
-
-    for fmt in ('%Y-%m-%d %H:%M:%S', '%Y-%m-%d', '%H:%M:%S'):
-        try:
-            return datetime.strptime(normalized, fmt)
-        except ValueError:
-            pass
-
-    if (normalized.startswith('{') and normalized.endswith('}')) or (
-        normalized.startswith('[') and normalized.endswith(']')
-    ):
-        try:
-            return json.loads(normalized)
-        except json.JSONDecodeError:
-            pass
-
-    return value
+@retry_network_call(retries=3, base_delay=0.2)
+def fetch_resource(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": "automation-tool-14"})
+    with urllib.request.urlopen(req, timeout=3) as response:
+        return response.read().decode("utf-8")
