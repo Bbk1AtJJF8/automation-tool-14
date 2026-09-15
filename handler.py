@@ -1,34 +1,43 @@
-import json
-from typing import Any, Dict, Union
-from functools import reduce
+import sys
 
-def deep_reach(data: Dict[str, Any], path: str, delimiter: str = '.') -> Any:
-    """navigates nested dicts using a path string"""
-    try:
-        return reduce(lambda d, key: d[key] if isinstance(d, dict) else None, path.split(delimiter), data)
-    except (KeyError, TypeError):
-        return None
+def validate_payload(data):
+    # Using a functional pipeline approach for validation
+    rules = [
+        lambda d: isinstance(d, dict), "Payload must be a dictionary",
+        lambda d: 'task_id' in d, "Missing mandatory task_id",
+        lambda d: len(str(d.get('task_id', ''))) > 3, "Task ID too short"
+    ]
+    for i in range(0, len(rules), 2):
+        if not rules[i](data):
+            raise ValueError(rules[i+1])
+    return True
 
-def sanitize_payload(payload: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
-    """coerces input into a clean dictionary object"""
-    if isinstance(payload, str):
+def run_processing_loop(queue):
+    """
+    Core execution loop with creative input sanitization
+    """
+    print("Starting automation-tool-14 processing cycle...")
+    while True:
         try:
-            return json.loads(payload)
-        except json.JSONDecodeError:
-            return {}
-    return dict(payload) if isinstance(payload, dict) else {}
+            job = queue.get()
+            if job is None:
+                break
+            
+            # Unusual approach: validation as a precondition gate
+            if validate_payload(job):
+                result = f"Processed {job['task_id']}"
+                print(result)
+            
+        except (ValueError, KeyError) as e:
+            sys.stderr.write(f"Skipping malformed input: {e}\n")
+        except Exception as e:
+            sys.stderr.write(f"Critical loop error: {e}\n")
 
-def transform_stream(data: Dict[str, Any], mapping: Dict[str, str]) -> Dict[str, Any]:
-    """maps data keys based on transformation schema"""
-    return {target: deep_reach(data, source) for target, source in mapping.items()}
-
-class DataPipe:
-    """fluent interface for processing arbitrary datasets"""
-    def __init__(self, data: Any):
-        self.data = sanitize_payload(data)
-    
-    def extract(self, path: str) -> 'DataPipe':
-        return DataPipe(deep_reach(self.data, path) or {})
-    
-    def serialize(self) -> str:
-        return json.dumps(self.data)
+if __name__ == "__main__":
+    # Example usage mock
+    from queue import Queue
+    q = Queue()
+    q.put({'task_id': 'AX-99'})
+    q.put({'bad_data': True})
+    q.put(None)
+    run_processing_loop(q)
