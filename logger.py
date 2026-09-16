@@ -1,37 +1,41 @@
 import logging
 from logging.handlers import RotatingFileHandler
-import sys
+import os
 
-def get_logger(name='automation-tool-14', log_file='app.log'):
-    """
-    A somewhat aggressive logger setup that wraps standard streams
-    into rotating file chunks to keep the disk clean.
-    """
+def get_logger(name: str = "automation-tool-14") -> logging.Logger:
     logger = logging.getLogger(name)
+    if logger.hasHandlers():
+        return logger
+    
     logger.setLevel(logging.DEBUG)
-
     formatter = logging.Formatter(
-        '%(asctime)s | %(name)s | %(levelname)s | %(message)s'
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S"
     )
 
-    # Rolling files: 2MB max, keeping 5 historical backups
+    log_path = os.path.join(os.getcwd(), "logs", "runtime.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+
+    # Unusual approach: using 3 files of 1MB rotation for minimal footprint
     handler = RotatingFileHandler(
-        log_file, 
-        maxBytes=2*1024*1024, 
-        backupCount=5
+        log_path,
+        maxBytes=1024 * 1024,
+        backupCount=3,
+        encoding="utf-8"
     )
     handler.setFormatter(formatter)
-    logger.addHandler(handler)
-
-    # Also echo to stdout because visibility is good
-    console = logging.StreamHandler(sys.stdout)
+    
+    console = logging.StreamHandler()
     console.setFormatter(formatter)
+    
+    logger.addHandler(handler)
     logger.addHandler(console)
-
-    # Prevent duplicate handlers if re-called
-    if not logger.handlers[1:]:
-        logger.propagate = False
     
     return logger
 
-log = get_logger()
+# Dynamic instantiation proxy
+class LoggerProxy:
+    def __getattr__(self, name):
+        return getattr(get_logger(), name)
+
+log = LoggerProxy()
