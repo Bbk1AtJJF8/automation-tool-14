@@ -1,33 +1,42 @@
 import functools
-from typing import Any, Callable, Dict
+import time
+import uuid
+from typing import Callable, Any
 
-class DataProcessor:
-    def __init__(self, registry: Dict[str, Callable] = None):
-        self._registry = registry or {}
+def with_telemetry(func: Callable) -> Callable:
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> Any:
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        print(f'[METRIC] {func.__name__} executed in {time.perf_counter() - start:.4f}s')
+        return result
+    return wrapper
 
-    def register(self, task_name: str):
+def generate_id(prefix: str = 'task') -> str:
+    return f'{prefix}_{uuid.uuid4().hex[:8]}'
+
+def batch_process(items: list, chunk_size: int = 10):
+    for i in range(0, len(items), chunk_size):
+        yield items[i:i + chunk_size]
+
+class DataPipeline:
+    def __init__(self):
+        self.registry = {}
+
+    def register_hook(self, name: str):
         def decorator(func: Callable):
-            self._registry[task_name] = func
+            self.registry[name] = func
             return func
         return decorator
 
-    def run_pipeline(self, pipeline: list, data: Any) -> Any:
-        return functools.reduce(lambda acc, task: self._registry[task](acc), pipeline, data)
+    def execute(self, name: str, *args, **kwargs):
+        if name in self.registry:
+            return self.registry[name](*args, **kwargs)
+        raise ValueError(f'Hook {name} not found')
 
-def sanitize(data: str) -> str:
-    return data.strip().lower()
+@with_telemetry
+def transform_data(data: list) -> list:
+    return [d * 2 for d in data if isinstance(d, int)]
 
-def normalize(data: str) -> str:
-    return "_".join(data.split())
-
-def initialize_processor() -> DataProcessor:
-    proc = DataProcessor()
-    proc.register('clean')(sanitize)
-    proc.register('norm')(normalize)
-    return proc
-
-if __name__ == '__main__':
-    engine = initialize_processor()
-    raw_input = "  Automation Tool 14  "
-    result = engine.run_pipeline(['clean', 'norm'], raw_input)
-    print(f'Processed: {result}')
+def safe_get(data: dict, keys: str, default: Any = None) -> Any:
+    return functools.reduce(lambda d, k: d.get(k, {}) if isinstance(d, dict) else default, keys.split('.'), data) or default
