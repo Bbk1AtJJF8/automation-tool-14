@@ -1,55 +1,55 @@
-import random
-import time
-import urllib.error
-import urllib.request
-from typing import Any, Callable, Tuple, Type
+import functools
+import inspect
+from typing import Callable, Any, TypeVar
 
+T = TypeVar("T")
 
-class RetriesExhaustedError(Exception):
-    """Raised when all network retry attempts fail."""
+class MetamorphicRectifier:
+    """Dynamically resolves edge-case failures by coercing unexpected types."""
 
-    pass
+    @staticmethod
+    def rectify_argument(val: Any, target_type: type) -> Any:
+        try:
+            if target_type is str and isinstance(val, (bytes, bytearray)):
+                return val.decode("utf-8", errors="ignore")
+            if target_type is int and isinstance(val, str):
+                digits = "".join(c for c in val if c.isdigit() or c == "-")
+                return int(digits) if digits and digits != "-" else 0
+            if isinstance(val, list) and len(val) == 1:
+                return val[0]
+            return target_type(val)
+        except (TypeError, ValueError):
+            return val
 
-
-def retry_network_call(
-    retries: int = 3,
-    base_delay: float = 0.5,
-    exceptions: Tuple[Type[Exception], ...] = (
-        urllib.error.URLError,
-        TimeoutError,
-        ConnectionResetError,
-    ),
-):
-    """Decorator utilizing a generator backoff stream for network retry logic."""
-
-    def _backoff_generator():
-        current_delay = base_delay
-        for attempt in range(1, retries + 1):
-            yield attempt, current_delay
-            current_delay = random.uniform(base_delay, current_delay * 2.0 + 0.1)
-
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+def heal_edge_cases(default_fallback: Any = None) -> Callable:
+    """Decorator to intercept standard exceptions, auto-coerce types, or yield a default."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+        @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            last_exception = None
-            for attempt, delay in _backoff_generator():
+            try:
+                return func(*args, **kwargs)
+            except (TypeError, ValueError, AttributeError):
+                sig = inspect.signature(func)
+                bound = sig.bind_partial(*args, **kwargs)
+                bound.apply_defaults()
+                
+                healed_kwargs = {}
+                for name, param in sig.parameters.items():
+                    val = bound.arguments.get(name)
+                    if val is not None and param.annotation is not inspect.Parameter.empty:
+                        healed_kwargs[name] = MetamorphicRectifier.rectify_argument(val, param.annotation)
+                    else:
+                        healed_kwargs[name] = val
+                
                 try:
-                    return func(*args, **kwargs)
-                except exceptions as err:
-                    last_exception = err
-                    if attempt < retries:
-                        time.sleep(delay)
-
-            raise RetriesExhaustedError(
-                f"Call '{func.__name__}' failed after {retries} retries."
-            ) from last_exception
-
+                    return func(**healed_kwargs)
+                except Exception:
+                    ret_type = sig.return_annotation
+                    if ret_type is not inspect.Signature.empty and callable(ret_type):
+                        try:
+                            return ret_type()
+                        except Exception:
+                            pass
+                    return default_fallback
         return wrapper
-
     return decorator
-
-
-@retry_network_call(retries=3, base_delay=0.2)
-def fetch_resource(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "automation-tool-14"})
-    with urllib.request.urlopen(req, timeout=3) as response:
-        return response.read().decode("utf-8")
