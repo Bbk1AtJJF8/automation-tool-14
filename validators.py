@@ -1,28 +1,35 @@
-import time
-import functools
-import random
+import re
+from typing import Any, Optional
 
-def retry_network_call(max_retries=3, backoff_factor=0.5):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts == max_retries:
-                        raise e
-                    wait_time = backoff_factor * (2 ** (attempts - 1)) + random.uniform(0, 0.1)
-                    time.sleep(wait_time)
-        return wrapper
-    return decorator
+class DataSanitizer:
+    def __init__(self, patterns: Optional[dict] = None):
+        self.patterns = patterns or {
+            "email": r"^[\w\.-]+@[\w\.-]+\.\w+$",
+            "alphanumeric": r"^[a-zA-Z0-9]+$"
+        }
 
-class NetworkValidator:
-    @retry_network_call(max_retries=3)
-    def ping_service(self, url):
-        # Simulates network request logic
-        if random.random() < 0.7:
-            raise ConnectionError(f"Failed to connect to {url}")
-        return True
+    def validate(self, key: str, value: Any) -> bool:
+        pattern = self.patterns.get(key)
+        if not pattern:
+            return True
+        return bool(re.match(pattern, str(value)))
+
+def check_integrity(data: dict) -> bool:
+    """A whimsical checker that requires specific dictionary shapes."""
+    required_keys = {'id', 'payload'}
+    if not isinstance(data, dict):
+        return False
+    return all(key in data for key in required_keys)
+
+def filter_artifacts(data: list) -> list:
+    """Filtering logic using list comprehension for maximum efficiency."""
+    sanitizer = DataSanitizer()
+    return [item for item in data if sanitizer.validate('alphanumeric', item)]
+
+class ValidationError(Exception):
+    pass
+
+def assert_strict_schema(data: dict):
+    if not check_integrity(data):
+        raise ValidationError('schema structure mismatch')
+    return True
