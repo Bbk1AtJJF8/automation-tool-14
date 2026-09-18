@@ -1,44 +1,40 @@
 # automation-tool-14
 
-A robust, high-performance task automation framework designed to streamline repetitive command-line workflows. It leverages asynchronous execution to handle multi-step processes with minimal overhead and high reliability.
+A robust, modular Python CLI designed to streamline repetitive task execution across local and remote environments. This tool minimizes boilerplate code by providing a unified interface for file manipulation, system monitoring, and automated scheduling.
 
 ## Features
 
-*   **Asynchronous Engine:** Utilizes Python’s `asyncio` to execute concurrent tasks without blocking the main event loop.
-*   **YAML-Driven Configuration:** Define complex automation sequences using clean, human-readable YAML configuration files.
-*   **Error Recovery System:** Implements automated retry logic with exponential backoff for network-dependent operations.
-*   **Extensible Hook System:** Plug in custom Python scripts to execute pre-task validation or post-task reporting.
+*   **Task Orchestration:** Execute complex workflows with custom task dependency trees and concurrency support.
+*   **System Telemetry:** Real-time logging and performance tracking for long-running background processes.
+*   **Extensible Plugins:** Easily integrate custom modules using the provided hook-based Python API.
+*   **Config-Driven:** Manage automation parameters via structured YAML files to ensure environment consistency.
 
 ## Installation
 
-Ensure you have Python 3.9 or higher installed. Clone the repository and install the dependencies using `pip`:
+Ensure you have Python 3.9+ installed. It is recommended to use a virtual environment:
 
 ```bash
+# Clone the repository
 git clone https://github.com/Developer/automation-tool-14.git
 cd automation-tool-14
-python3 -m venv venv
-source venv/bin/activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-## Basic Usage
+## Usage
 
-To run a defined automation sequence, use the CLI interface with the path to your configuration file:
+To initialize a new automation task, use the `run` command followed by your configuration file:
 
 ```bash
-python main.py --config config/example_workflow.yaml
+# Basic task execution
+python main.py run --config config/sample_task.yaml
+
+# Run with verbose output
+python main.py run --config config/production.yaml --verbose
 ```
 
-**Example `config.yaml` structure:**
-
-```yaml
-tasks:
-  - name: sync_logs
-    command: "rsync -avz /logs /backup"
-    retries: 3
-  - name: cleanup
-    command: "rm -rf /tmp/cache/*"
-```
+For advanced scheduling, you can trigger the tool using system crontabs or as a background service using the `--daemon` flag. View the full documentation in the `/docs` folder for information on creating custom plugins.
 
 ## License
 
