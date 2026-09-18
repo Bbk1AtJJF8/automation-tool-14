@@ -1,34 +1,31 @@
-import logging
-import os
-from logging.handlers import RotatingFileHandler
+import sys
+import datetime
+from typing import Any, NoReturn
 
-def get_logger(name: str = 'automation-tool-14') -> logging.Logger:
-    log_path = os.path.join(os.getcwd(), 'logs', f'{name}.log')
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-    
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '[%(asctime)s] [%(levelname)s] [%(module)s]: %(message)s',
-            datefmt='%Y-%m-%d %H:%M:%S'
-        )
-        
-        rotator = RotatingFileHandler(
-            log_path, 
-            maxBytes=5 * 1024 * 1024, 
-            backupCount=3
-        )
-        rotator.setFormatter(formatter)
-        logger.addHandler(rotator)
-        
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-        
-    return logger
+def log_message(level: str, message: str, meta: dict[str, Any] | None = None) -> None:
+    """Dispatch formatted log entry to standard error stream."""
+    timestamp: str = datetime.datetime.now().isoformat()
+    context: str = f" | {meta}" if meta else ""
+    formatted: str = f"[{timestamp}] {level.upper()}: {message}{context}"
+    print(formatted, file=sys.stderr)
 
-if __name__ == '__main__':
-    log = get_logger()
-    log.info('System initialization sequence triggered')
+class TraceBuffer:
+    """Ephemeral memory-based log interceptor for unexpected code paths."""
+    def __init__(self, limit: int = 10) -> None:
+        self._stack: list[str] = []
+        self._limit: int = limit
+
+    def capture(self, entry: str) -> None:
+        """Append event and enforce cyclic buffer constraints."""
+        self._stack.append(f"{datetime.datetime.now()}: {entry}")
+        if len(self._stack) > self._limit:
+            self._stack.pop(0)
+
+    def dump(self) -> list[str]:
+        """Return current buffered state as ordered list."""
+        return self._stack
+
+def critical_abort(reason: str) -> NoReturn:
+    """Instant process termination with final log broadcast."""
+    log_message("CRITICAL", reason)
+    sys.exit(1)
