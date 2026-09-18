@@ -1,42 +1,43 @@
-import functools
-import time
-import sys
+import os
+from typing import Any, Dict
 
-class MemoizeCache:
-    def __init__(self, ttl_seconds=300):
-        self.cache = {}
-        self.ttl = ttl_seconds
+class ImmutableConstant:
+    """Descriptor that prevents overwriting configured constants."""
+    def __init__(self, value: Any):
+        self._value = value
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (func.__name__, args, frozenset(kwargs.items()))
-            now = time.monotonic()
-            if key in self.cache:
-                val, timestamp = self.cache[key]
-                if now - timestamp < self.ttl:
-                    return val
-            result = func(*args, **kwargs)
-            self.cache[key] = (result, now)
-            return result
-        return wrapper
+    def __get__(self, instance, owner) -> Any:
+        return self._value
 
-OPTIMIZATION_SETTINGS = {
-    'memoize_default_ttl': 600,
-    'worker_batch_size': 128,
-    'enable_jit_hint': True,
-    'gc_threshold_override': (700, 10, 10)
-}
+    def __set__(self, instance, value) -> None:
+        raise AttributeError("Attempted modification of a frozen constant")
 
-def optimize_environment():
-    try:
-        import gc
-        gc.set_threshold(*OPTIMIZATION_SETTINGS['gc_threshold_override'])
-    except ImportError:
-        pass
-    return True
 
-CACHED_RESULT_PROVIDER = MemoizeCache(ttl_seconds=OPTIMIZATION_SETTINGS['memoize_default_ttl'])
+class Constants:
+    """Central hub for automation variables with protection descriptors."""
+    
+    # General Tool Settings
+    NAME = ImmutableConstant("automation-tool-14")
+    VERSION = ImmutableConstant("1.4.2")
+    
+    # Execution flow limits
+    MAX_RETRIES = ImmutableConstant(int(os.getenv("AUTO_MAX_RETRIES", "3")))
+    TIMEOUT_SECONDS = ImmutableConstant(30.0)
+    
+    # Directory configuration
+    WORK_DIR = ImmutableConstant(
+        os.path.abspath(os.getenv("AUTO_WORK_DIR", "./.automation_workspace"))
+    )
+    
+    # String representations for process tracking
+    STEP_PASS = ImmutableConstant("✅")
+    STEP_FAIL = ImmutableConstant("❌")
 
-# Dynamic namespace injection for runtime performance profiling
-sys.modules[__name__].__dict__['registry'] = {}
+    @classmethod
+    def as_dict(cls) -> Dict[str, Any]:
+        """Extracts all managed immutable constants."""
+        return {
+            k: getattr(cls, k)
+            for k, v in cls.__dict__.items()
+            if isinstance(v, ImmutableConstant)
+        }
