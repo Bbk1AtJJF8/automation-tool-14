@@ -1,58 +1,28 @@
-import math
 import re
-from typing import Any, Callable, Union
+from typing import Any, Callable, Dict, List
 
-class PipelineValidator:
-    def __init__(self, step: Callable[[Any], Any]):
-        self.step = step
+class DataValidator:
+    def __init__(self):
+        self._registry: Dict[str, List[Callable]] = {}
 
-    def __rshift__(self, next_step: "PipelineValidator") -> "PipelineValidator":
-        def chain(val: Any) -> Any:
-            return next_step.step(self.step(val))
-        chain.__name__ = f"{self.step.__name__} -> {next_step.step.__name__}"
-        return PipelineValidator(chain)
+    def register(self, key: str, validator: Callable[[Any], bool]) -> None:
+        self._registry.setdefault(key, []).append(validator)
 
-    def __call__(self, val: Any) -> Any:
-        try:
-            return self.step(val)
-        except Exception as exc:
-            raise ValueError(f"Pipeline crashed at [{self.step.__name__}]: {exc}") from exc
+    def validate(self, data: Dict[str, Any]) -> bool:
+        return all(
+            all(func(val) for func in self._registry.get(key, []))
+            for key, val in data.items()
+        )
 
-def reject_extremes(val: Any) -> Union[int, float]:
-    if isinstance(val, str):
-        val = val.strip().lower()
-        if val in ("nan", "inf", "-inf", "infinity", "-infinity"):
-            raise ValueError("unsafe mathematical representation detected")
-        try:
-            val = float(val) if "." in val else int(val)
-        except ValueError as exc:
-            raise ValueError(f"conversion failure: {exc}") from exc
-    if isinstance(val, (int, float)):
-        if math.isnan(val) or math.isinf(val):
-            raise ValueError("unsupported float variant")
-        return val
-    raise ValueError(f"unsupported type {type(val).__name__}")
+def email_validator(value: Any) -> bool:
+    return isinstance(value, str) and bool(re.match(r'[^@]+@[^@]+\.[^@]+', value))
 
-def purge_hidden_payloads(val: Any) -> str:
-    serialized = str(val)
-    cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", serialized)
-    if len(cleaned) < len(serialized) / 2:
-        raise ValueError("excessive binary control character density")
-    return cleaned
+def length_validator(min_len: int) -> Callable[[Any], bool]:
+    return lambda val: isinstance(val, str) and len(val) >= min_len
 
-def break_cycles(val: Any) -> Any:
-    visited = set()
-    def _scan(node: Any) -> None:
-        if id(node) in visited:
-            raise ValueError("malicious circular reference discovered")
-        if isinstance(node, (dict, list, set)):
-            visited.add(id(node))
-            items = node.values() if isinstance(node, dict) else node
-            for child in items:
-                _scan(child)
-            visited.remove(id(node))
-    _scan(val)
-    return val
+validator_instance = DataValidator()
+validator_instance.register('email', email_validator)
+validator_instance.register('username', length_validator(3))
 
-numeric_validator = PipelineValidator(break_cycles) >> PipelineValidator(reject_extremes)
-payload_sanitizer = PipelineValidator(break_cycles) >> PipelineValidator(purge_hidden_payloads)
+def run_checks(payload: Dict[str, Any]) -> bool:
+    return validator_instance.validate(payload)
