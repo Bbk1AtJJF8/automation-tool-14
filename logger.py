@@ -1,31 +1,37 @@
-import sys
-import datetime
-from typing import Any, NoReturn
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
-def log_message(level: str, message: str, meta: dict[str, Any] | None = None) -> None:
-    """Dispatch formatted log entry to standard error stream."""
-    timestamp: str = datetime.datetime.now().isoformat()
-    context: str = f" | {meta}" if meta else ""
-    formatted: str = f"[{timestamp}] {level.upper()}: {message}{context}"
-    print(formatted, file=sys.stderr)
+def setup_dynamic_logger(name='automation-tool-14', log_file='app.log'):
+    """
+    Installs a verbose logger with file rotation.
+    Uses a custom formatter for structured output.
+    """
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-class TraceBuffer:
-    """Ephemeral memory-based log interceptor for unexpected code paths."""
-    def __init__(self, limit: int = 10) -> None:
-        self._stack: list[str] = []
-        self._limit: int = limit
+    # Prevent duplicate handlers if called multiple times
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            '[%(asctime)s] %(levelname)-8s | %(name)s | %(message)s',
+            '%Y-%m-%d %H:%M:%S'
+        )
 
-    def capture(self, entry: str) -> None:
-        """Append event and enforce cyclic buffer constraints."""
-        self._stack.append(f"{datetime.datetime.now()}: {entry}")
-        if len(self._stack) > self._limit:
-            self._stack.pop(0)
+        # Rotating file handler: 5MB per file, keep 3 backups
+        file_handler = RotatingFileHandler(
+            log_file, 
+            maxBytes=5 * 1024 * 1024, 
+            backupCount=3
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
 
-    def dump(self) -> list[str]:
-        """Return current buffered state as ordered list."""
-        return self._stack
+        # Also output to stdout for visibility
+        stream_handler = logging.StreamHandler()
+        stream_handler.setFormatter(formatter)
+        logger.addHandler(stream_handler)
 
-def critical_abort(reason: str) -> NoReturn:
-    """Instant process termination with final log broadcast."""
-    log_message("CRITICAL", reason)
-    sys.exit(1)
+    return logger
+
+# Instantiate singleton-like logger for project
+log = setup_dynamic_logger()
