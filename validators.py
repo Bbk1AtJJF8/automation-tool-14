@@ -1,32 +1,35 @@
 import re
-from typing import Any, Callable, Dict, List, Optional
 
-class InputValidator:
+class DataValidator:
     def __init__(self):
-        self._rules: Dict[str, Callable[[Any], bool]] = {
-            'non_empty_str': lambda x: isinstance(x, str) and len(x.strip()) > 0,
-            'positive_int': lambda x: isinstance(x, int) and x > 0,
-            'safe_path': lambda x: isinstance(x, str) and bool(re.match(r'^[a-zA-Z0-9_/.-]+$', x))
+        self._rules = {
+            'port': lambda x: 1024 <= int(x) <= 65535,
+            'path': lambda x: bool(re.match(r'^(/[a-zA-Z0-9_-]+)+$', str(x))),
+            'level': lambda x: x in {'debug', 'info', 'warn', 'error'}
         }
 
-    def validate(self, schema: Dict[str, str], data: Dict[str, Any]) -> List[str]:
-        errors = []
-        for field, rule_name in schema.items():
-            value = data.get(field)
-            rule = self._rules.get(rule_name)
-            if not rule or not rule(value):
-                errors.append(f'field {field} failed {rule_name} check')
-        return errors
+    def validate_payload(self, data: dict) -> dict:
+        validated = {}
+        for key, value in data.items():
+            if key in self._rules:
+                if self._rules[key](value):
+                    validated[key] = value
+                else:
+                    raise ValueError(f'invalid value provided for {key}')
+            else:
+                validated[key] = value
+        return validated
 
-    def pipeline_check(self, data: Dict[str, Any]) -> bool:
-        """Unconventional middleware-style validation for automation loop."""
-        if not isinstance(data, dict) or not data:
-            return False
-        
-        # Self-healing logic for empty payloads
-        data.setdefault('status', 'pending')
-        return True
+def secure_loop(processor_func, data_stream):
+    validator = DataValidator()
+    for item in data_stream:
+        try:
+            clean_data = validator.validate_payload(item)
+            processor_func(clean_data)
+        except (ValueError, TypeError, KeyError) as e:
+            print(f'skipping malicious or malformed entry: {e}')
+            continue
 
-    @staticmethod
-    def sanitize_input(data: Dict[str, Any]) -> Dict[str, Any]:
-        return {k: v.strip() if isinstance(v, str) else v for k, v in data.items()}
+if __name__ == '__main__':
+    mock_data = [{'port': 8080, 'path': '/api/v1'}, {'port': 80, 'path': '/root'}]
+    secure_loop(print, mock_data)
