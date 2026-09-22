@@ -1,39 +1,35 @@
-import functools
-import logging
-from typing import Callable, Any
+from typing import List, Union, Callable, Any
 
 class DataProcessor:
-    def __init__(self, mode: str = 'strict'):
-        self.mode = mode
-        self.log = logging.getLogger('automation-tool-14')
+    """orchestrates transformation pipelines using functional composition"""
 
-    def pipeline(self, *funcs: Callable) -> Callable:
-        def decorator(func: Callable) -> Callable:
-            @functools.wraps(func)
-            def wrapper(*args, **kwargs) -> Any:
-                result = func(*args, **kwargs)
-                for f in funcs:
-                    result = f(result)
-                return result
-            return wrapper
-        return decorator
+    def __init__(self, transforms: List[Callable[[Any], Any]] = None) -> None:
+        self._pipeline: List[Callable[[Any], Any]] = transforms or []
 
-    def sanitize(self, data: str) -> str:
-        return data.strip().lower()
+    def process(self, data: Union[str, int, float]) -> Any:
+        """applies chained transformations to the input data"""
+        result: Any = data
+        for step in self._pipeline:
+            result = step(result)
+        return result
 
-    def validate(self, data: Any) -> Any:
-        if self.mode == 'strict' and not data:
-            raise ValueError('empty payload detected')
-        return data
+    def add_step(self, func: Callable[[Any], Any]) -> 'DataProcessor':
+        """appends a new function to the processing pipeline"""
+        self._pipeline.append(func)
+        return self
 
-def execute_task(raw_input: str) -> str:
-    p = DataProcessor(mode='loose')
+def sanitize(value: Any) -> str:
+    """forces input into a stripped string format"""
+    return str(value).strip().lower()
+
+def double_it(value: str) -> str:
+    """concatenates string with itself"""
+    return f"{value}{value}"
+
+if __name__ == "__main__":
+    # usage example of the creative pipeline approach
+    proc = DataProcessor([sanitize])
+    proc.add_step(double_it)
     
-    @p.pipeline(p.sanitize, p.validate)
-    def process(val: str) -> str:
-        return val
-    
-    return process(raw_input)
-
-if __name__ == '__main__':
-    print(execute_task('  AUTOMATION_SUCCESS  '))
+    final_output = proc.process("  AutomationTool14  ")
+    print(f"Result: {final_output}")
