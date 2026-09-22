@@ -1,42 +1,39 @@
 import functools
-import time
-import uuid
+import logging
 from typing import Callable, Any
 
-def with_telemetry(func: Callable) -> Callable:
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> Any:
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        print(f'[METRIC] {func.__name__} executed in {time.perf_counter() - start:.4f}s')
-        return result
-    return wrapper
+class DataProcessor:
+    def __init__(self, mode: str = 'strict'):
+        self.mode = mode
+        self.log = logging.getLogger('automation-tool-14')
 
-def generate_id(prefix: str = 'task') -> str:
-    return f'{prefix}_{uuid.uuid4().hex[:8]}'
-
-def batch_process(items: list, chunk_size: int = 10):
-    for i in range(0, len(items), chunk_size):
-        yield items[i:i + chunk_size]
-
-class DataPipeline:
-    def __init__(self):
-        self.registry = {}
-
-    def register_hook(self, name: str):
-        def decorator(func: Callable):
-            self.registry[name] = func
-            return func
+    def pipeline(self, *funcs: Callable) -> Callable:
+        def decorator(func: Callable) -> Callable:
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs) -> Any:
+                result = func(*args, **kwargs)
+                for f in funcs:
+                    result = f(result)
+                return result
+            return wrapper
         return decorator
 
-    def execute(self, name: str, *args, **kwargs):
-        if name in self.registry:
-            return self.registry[name](*args, **kwargs)
-        raise ValueError(f'Hook {name} not found')
+    def sanitize(self, data: str) -> str:
+        return data.strip().lower()
 
-@with_telemetry
-def transform_data(data: list) -> list:
-    return [d * 2 for d in data if isinstance(d, int)]
+    def validate(self, data: Any) -> Any:
+        if self.mode == 'strict' and not data:
+            raise ValueError('empty payload detected')
+        return data
 
-def safe_get(data: dict, keys: str, default: Any = None) -> Any:
-    return functools.reduce(lambda d, k: d.get(k, {}) if isinstance(d, dict) else default, keys.split('.'), data) or default
+def execute_task(raw_input: str) -> str:
+    p = DataProcessor(mode='loose')
+    
+    @p.pipeline(p.sanitize, p.validate)
+    def process(val: str) -> str:
+        return val
+    
+    return process(raw_input)
+
+if __name__ == '__main__':
+    print(execute_task('  AUTOMATION_SUCCESS  '))
