@@ -1,34 +1,36 @@
-import logging
-import os
-from logging.handlers import RotatingFileHandler
+import sys
+import datetime
+from functools import wraps
 
-def get_logger(name: str, log_file: str = 'automation.log') -> logging.Logger:
-    """
-    custom rotating logger factory for automation-tool-14
-    """
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+class CustomLogger:
+    def __init__(self, prefix: str = 'AUTO-TOOL'):
+        self.prefix = prefix
+        self.stream = sys.stdout
 
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s'
-        )
+    def log(self, level: str, message: str):
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        entry = f'[{timestamp}] [{self.prefix}] [{level.upper()}]: {message}'
+        print(entry, file=self.stream)
 
-        # using a 5MB rotation limit with 3 backup files
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=5 * 1024 * 1024,
-            backupCount=3
-        )
-        file_handler.setFormatter(formatter)
+    def info(self, msg: str):
+        self.log('INFO', msg)
 
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
+    def error(self, msg: str):
+        self.log('ERROR', msg)
 
-        logger.addHandler(file_handler)
-        logger.addHandler(console_handler)
+def log_execution(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        logger = CustomLogger()
+        logger.info(f'starting execution of {func.__name__}')
+        try:
+            result = func(*args, **kwargs)
+            logger.info(f'finished execution of {func.__name__}')
+            return result
+        except Exception as e:
+            logger.error(f'failed {func.__name__} with error: {str(e)}')
+            raise e
+    return wrapper
 
-    return logger
-
-# unique instance initialization for tool context
-log = get_logger('automation-tool-14')
+# Instance for quick import
+app_logger = CustomLogger()
