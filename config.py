@@ -3,33 +3,32 @@ import os
 from typing import Any, Dict
 
 class ConfigLoader:
-    def __init__(self, defaults: Dict[str, Any], path: str = 'config.json'):
-        self.path = path
-        self.data = defaults
-        self._load_and_merge()
+    """a recursive deep merge configuration loader"""
+    def __init__(self, defaults: Dict[str, Any]):
+        self._data = defaults
 
-    def _load_and_merge(self) -> None:
-        if not os.path.exists(self.path):
-            self._save_defaults()
-            return
+    def load_from_json(self, path: str) -> None:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                self._update_recursive(self._data, json.load(f))
+
+    def _update_recursive(self, base: Dict, new: Dict) -> None:
+        for key, value in new.items():
+            if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+                self._update_recursive(base[key], value)
+            else:
+                base[key] = value
+
+    def get(self, key: str, default: Any = None) -> Any:
+        keys = key.split('.')
+        val = self._data
         try:
-            with open(self.path, 'r') as f:
-                user_config = json.load(f)
-                self.data.update(user_config)
-        except (json.JSONDecodeError, IOError):
-            pass
+            for k in keys:
+                val = val[k]
+            return val
+        except (KeyError, TypeError):
+            return default
 
-    def _save_defaults(self) -> None:
-        try:
-            with open(self.path, 'w') as f:
-                json.dump(self.data, f, indent=4)
-        except IOError:
-            pass
-
-    def __getitem__(self, key: str) -> Any:
-        return self.data.get(key)
-
-def get_config(defaults: Dict[str, Any]) -> ConfigLoader:
-    return ConfigLoader(defaults)
-
-# usage: cfg = get_config({'port': 8080, 'debug': True})
+    @property
+    def all(self) -> Dict[str, Any]:
+        return self._data
