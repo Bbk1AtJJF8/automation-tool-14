@@ -1,49 +1,41 @@
 import time
-from typing import Any, Callable, Dict, List, Optional
+import functools
+import random
+from typing import Callable, Any
 
+def retry_with_jitter(retries: int = 3, delay: float = 0.5):
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for i in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_ex = e
+                    sleep_time = delay * (2 ** i) + random.uniform(0, 0.1)
+                    time.sleep(sleep_time)
+            raise last_ex
+        return wrapper
+    return decorator
 
-class AutoPipe:
-    """A fluent pipeline wrapper enabling bitwise OR (|) syntax for transformations."""
-    def __init__(self, value: Any):
-        self.value = value
+def compose(*functions):
+    return functools.reduce(lambda f, g: lambda x: f(g(x)), functions, lambda x: x)
 
-    def __or__(self, func: Callable[[Any], Any]) -> 'AutoPipe':
-        if callable(func):
-            return AutoPipe(func(self.value))
-        return self
+def memoize_ttl(ttl_seconds: int = 60):
+    cache = {}
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items()))
+            now = time.time()
+            if key in cache and (now - cache[key]['ts']) < ttl_seconds:
+                return cache[key]['val']
+            result = func(*args, **kwargs)
+            cache[key] = {'val': result, 'ts': now}
+            return result
+        return wrapper
+    return decorator
 
-    def unwrap(self) -> Any:
-        return self.value
-
-
-def deep_get(data: Dict[str, Any], path: str, default: Any = None) -> Any:
-    """Extract nested dictionary values using dot notation paths."""
-    keys = path.split('.')
-    curr = data
-    for k in keys:
-        if isinstance(curr, dict) and k in curr:
-            curr = curr[k]
-        else:
-            return default
-    return curr
-
-
-def retry_exec(func: Callable[[], Any], retries: int = 3, delay: float = 0.5) -> Any:
-    """Executes a parameterless callable with exponential backoff on failure."""
-    last_exc: Optional[Exception] = None
-    for attempt in range(retries):
-        try:
-            return func()
-        except Exception as e:
-            last_exc = e
-            time.sleep(delay * (2 ** attempt))
-    if last_exc:
-        raise last_exc
-    raise RuntimeError("Execution failed without specific exception")
-
-
-def batch_process(items: List[Any], size: int) -> List[List[Any]]:
-    """Splits a list into chunks of the specified size."""
-    if size <= 0:
-        raise ValueError("Batch size must be greater than zero")
-    return [items[i:i + size] for i in range(0, len(items), size)]
+def flatten(lst: list) -> list:
+    return [item for sublist in lst for item in (flatten(sublist) if isinstance(sublist, list) else [sublist])]
