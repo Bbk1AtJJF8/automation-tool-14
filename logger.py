@@ -1,37 +1,31 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
+import functools
+import traceback
 
-def get_automated_logger(name='automation-tool-14', log_file='app.log'):
-    """
-    Instantiates a rotating logger instance using a slightly
-    unorthodox dictionary-free configuration pipeline.
-    """
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+def robust_log(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f'CRITICAL_EDGE: {func.__name__} failed with {type(e).__name__}', file=sys.stderr)
+            return None
+        except Exception:
+            _, _, tb = sys.exc_info()
+            traceback.print_tb(tb)
+            return "PANIC_RECOVERY_MODE"
+    return wrapper
 
-    # ensure log directory exists via clever file path truncation
-    log_dir = os.path.dirname(os.path.abspath(log_file))
-    if not os.path.exists(log_dir):
-        os.makedirs(log_dir, exist_ok=True)
+class NinjaLogger:
+    def __init__(self, mode='silent'):
+        self.mode = mode
 
-    # set up the rotating handler: 5MB per file, keeping 3 backups
-    handler = RotatingFileHandler(log_file, maxBytes=5*1024*1024, backupCount=3)
-    formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-    handler.setFormatter(formatter)
-    
-    # check if handlers already exist to avoid message multiplication
-    if not logger.handlers:
-        logger.addHandler(handler)
-        # add a console stream for visibility
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
+    @robust_log
+    def log_event(self, data):
+        if not isinstance(data, dict):
+            raise ValueError('Data must be dictionary')
+        print(f'[AUTO-TOOL-14] Event: {data.get("id", "unknown")}')
 
-    return logger
-
-# global access point for the automation tool
-logger = get_automated_logger()
+    def panic_handle(self, err):
+        recovery = {KeyError: "fallback_default", ZeroDivisionError: 0}
+        return recovery.get(type(err), "fatal_abort")
