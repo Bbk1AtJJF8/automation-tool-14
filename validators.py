@@ -1,35 +1,40 @@
 import re
+from typing import Any, Callable, Dict, List, Union
 
-class DataValidator:
-    def __init__(self):
-        self._rules = {
-            'port': lambda x: 1024 <= int(x) <= 65535,
-            'path': lambda x: bool(re.match(r'^(/[a-zA-Z0-9_-]+)+$', str(x))),
-            'level': lambda x: x in {'debug', 'info', 'warn', 'error'}
-        }
-
-    def validate_payload(self, data: dict) -> dict:
-        validated = {}
-        for key, value in data.items():
-            if key in self._rules:
-                if self._rules[key](value):
-                    validated[key] = value
-                else:
-                    raise ValueError(f'invalid value provided for {key}')
-            else:
-                validated[key] = value
-        return validated
-
-def secure_loop(processor_func, data_stream):
-    validator = DataValidator()
-    for item in data_stream:
+def sanitize_input(data: Any, schema: Dict[str, Callable]) -> Dict[str, Any]:
+    """Dynamic pipeline for data shape enforcement."""
+    processed = {}
+    for key, validator in schema.items():
+        value = data.get(key)
         try:
-            clean_data = validator.validate_payload(item)
-            processor_func(clean_data)
-        except (ValueError, TypeError, KeyError) as e:
-            print(f'skipping malicious or malformed entry: {e}')
-            continue
+            processed[key] = validator(value) if value is not None else None
+        except Exception:
+            processed[key] = None
+    return processed
+
+def chain_validators(*funcs: Callable) -> Callable:
+    """Functional composition of data inspection logic."""
+    def wrapper(val: Any) -> Any:
+        for f in funcs:
+            val = f(val)
+        return val
+    return wrapper
+
+def is_email(val: str) -> Union[str, None]:
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return val if isinstance(val, str) and re.match(pattern, val) else None
+
+def to_int(val: Any) -> Union[int, None]:
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
 
 if __name__ == '__main__':
-    mock_data = [{'port': 8080, 'path': '/api/v1'}, {'port': 80, 'path': '/root'}]
-    secure_loop(print, mock_data)
+    schema = {
+        'id': to_int,
+        'email': is_email,
+        'score': chain_validators(to_int, lambda x: max(0, min(x or 0, 100)))
+    }
+    sample = {'id': '123', 'email': 'test@example.com', 'score': '150'}
+    print(sanitize_input(sample, schema))
