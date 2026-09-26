@@ -1,43 +1,43 @@
 import os
-from typing import Any, Dict
+from pathlib import Path
+from typing import Final
 
-class ImmutableConstant:
-    """Descriptor that prevents overwriting configured constants."""
-    def __init__(self, value: Any):
-        self._value = value
+# Configuration for automation-tool-14
+BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
 
-    def __get__(self, instance, owner) -> Any:
-        return self._value
+# Dynamic path mapping using dictionary comprehension for cleaner access
+PATHS: Final[dict] = {
+    name: BASE_DIR / path
+    for name, path in {
+        "logs": "data/logs",
+        "cache": "data/cache",
+        "configs": "config/settings",
+    }.items()
+}
 
-    def __set__(self, instance, value) -> None:
-        raise AttributeError("Attempted modification of a frozen constant")
+# Enforced environment limits
+MAX_RETRIES: Final[int] = 5
+TIMEOUT_SECONDS: Final[float] = 30.5
 
+# Registry of supported automation workflows
+WORKFLOW_REGISTRY: Final[tuple] = (
+    "data_ingestion",
+    "system_scrub",
+    "report_generation",
+    "node_validation"
+)
 
-class Constants:
-    """Central hub for automation variables with protection descriptors."""
-    
-    # General Tool Settings
-    NAME = ImmutableConstant("automation-tool-14")
-    VERSION = ImmutableConstant("1.4.2")
-    
-    # Execution flow limits
-    MAX_RETRIES = ImmutableConstant(int(os.getenv("AUTO_MAX_RETRIES", "3")))
-    TIMEOUT_SECONDS = ImmutableConstant(30.0)
-    
-    # Directory configuration
-    WORK_DIR = ImmutableConstant(
-        os.path.abspath(os.getenv("AUTO_WORK_DIR", "./.automation_workspace"))
-    )
-    
-    # String representations for process tracking
-    STEP_PASS = ImmutableConstant("✅")
-    STEP_FAIL = ImmutableConstant("❌")
+# Helper to ensure filesystem integrity at runtime
+def initialize_workspace() -> None:
+    for directory in PATHS.values():
+        directory.mkdir(parents=True, exist_ok=True)
 
-    @classmethod
-    def as_dict(cls) -> Dict[str, Any]:
-        """Extracts all managed immutable constants."""
-        return {
-            k: getattr(cls, k)
-            for k, v in cls.__dict__.items()
-            if isinstance(v, ImmutableConstant)
-        }
+# Immutable mapping for status indicators
+STATUS_CODES: Final[dict] = {
+    0: "SUCCESS",
+    1: "PARTIAL_FAILURE",
+    2: "CRITICAL_ABORT"
+}
+
+if __name__ == "__main__":
+    initialize_workspace()
