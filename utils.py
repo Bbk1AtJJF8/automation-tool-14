@@ -1,35 +1,41 @@
 import time
-import functools
 import random
+from functools import wraps
+from typing import Callable, Any, Tuple, Type
 
-def retry_operation(max_attempts=3, base_delay=1, jitter=True):
-    """Decorator implementing exponential backoff for flaky network calls."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
+def chaotic_jitter(seed: float = 0.5) -> float:
+    """Generates chaotic pseudo-random delay using a logistic map."""
+    r = 3.9
+    val = seed
+    for _ in range(5):
+        val = r * val * (1 - val)
+    return val
+
+def resilient(
+    max_attempts: int = 5,
+    base_delay: float = 1.0,
+    exceptions: Tuple[Type[BaseException], ...] = (Exception,)
+) -> Callable:
+    """Decorator that retries a function with Fibonacci backoff and chaotic jitter."""
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            def fibonacci_backoff():
+                a, b = base_delay, base_delay
+                while True:
+                    yield a
+                    a, b = b, a + b
+
+            delay_generator = fibonacci_backoff()
+            for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    attempts += 1
-                    if attempts >= max_attempts:
-                        raise e
-                    
-                    # Exponential backoff calculation
-                    delay = base_delay * (2 ** (attempts - 1))
-                    if jitter:
-                        delay += random.uniform(0, 0.1 * delay)
-                    
-                    time.sleep(delay)
-            return None
+                except exceptions as err:
+                    if attempt == max_attempts:
+                        raise err
+                    raw_delay = next(delay_generator)
+                    jitter = chaotic_jitter(random.random())
+                    total_delay = raw_delay + jitter
+                    time.sleep(total_delay)
         return wrapper
     return decorator
-
-# Example usage for automation-tool-14 modules
-@retry_operation(max_attempts=4)
-def fetch_remote_resource(url):
-    # Simulate network instability
-    if random.random() < 0.7:
-        raise ConnectionError(f"Failed to connect to {url}")
-    return f"Payload from {url}"
