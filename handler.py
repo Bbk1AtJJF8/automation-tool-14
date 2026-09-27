@@ -1,38 +1,37 @@
-import functools
 import logging
-import sys
+import os
+from functools import wraps
 
-class AutomationError(Exception):
-    """Custom exception for edge cases in automation-tool-14."""
-    pass
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('automation-tool-14')
 
-def resilient_execution(func):
-    @functools.wraps(func)
+def cleanup_pipeline(func):
+    @wraps(func)
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (ValueError, TypeError, KeyError) as e:
-            logging.error(f"Data corruption detected in {func.__name__}: {e}")
-            return None
-        except Exception as e:
-            logging.critical(f"Unrecoverable logic failure: {e}")
-            sys.exit(1)
+        finally:
+            logger.info('executing context-aware teardown routine')
     return wrapper
 
-@resilient_execution
-def process_batch(data):
-    if not isinstance(data, list):
-        raise ValueError("Input must be a list structure")
-    
-    result = []
-    for item in data:
-        # Creative handling: treat missing keys as 'null' instead of failing
-        val = item.get('value', None) if isinstance(item, dict) else item
-        result.append(val * 2 if val is not None else 0)
-    return result
+class DataHandler:
+    def __init__(self, directory: str = '/tmp/at14'):
+        self.storage = directory
+        os.makedirs(self.storage, exist_ok=True)
 
-if __name__ == "__main__":
-    # Test case for edge handling
-    test_input = [10, {'value': 5}, "bad_data", None]
-    output = process_batch(test_input)
-    print(f"Final Processed Output: {output}")
+    @cleanup_pipeline
+    def process_payload(self, data: dict) -> bool:
+        file_path = os.path.join(self.storage, 'session.dat')
+        content = "\n".join([f"{k}:{v}" for k, v in data.items()])
+        
+        with open(file_path, 'w') as f:
+            f.write(content)
+            
+        logger.info(f'processed {len(data)} items into {file_path}')
+        return True
+
+    def purge(self):
+        for root, dirs, files in os.walk(self.storage):
+            for name in files:
+                os.remove(os.path.join(root, name))
+        logger.info('clean slate established for current session')
