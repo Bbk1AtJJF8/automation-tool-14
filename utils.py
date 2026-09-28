@@ -1,41 +1,46 @@
-import time
-import random
-from functools import wraps
-from typing import Callable, Any, Tuple, Type
+from typing import Any, Union, Generator
 
-def chaotic_jitter(seed: float = 0.5) -> float:
-    """Generates chaotic pseudo-random delay using a logistic map."""
-    r = 3.9
-    val = seed
-    for _ in range(5):
-        val = r * val * (1 - val)
-    return val
+class DataPathNavigator:
+    """A creative way to traverse and manipulate nested dictionary data
+    using the division (/) operator, supporting fallback values.
+    """
+    def __init__(self, data: Any, default: Any = None):
+        self.data = data
+        self.default = default
 
-def resilient(
-    max_attempts: int = 5,
-    base_delay: float = 1.0,
-    exceptions: Tuple[Type[BaseException], ...] = (Exception,)
-) -> Callable:
-    """Decorator that retries a function with Fibonacci backoff and chaotic jitter."""
-    def decorator(func: Callable) -> Callable:
-        @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> Any:
-            def fibonacci_backoff():
-                a, b = base_delay, base_delay
-                while True:
-                    yield a
-                    a, b = b, a + b
+    def __truediv__(self, key: Union[str, int]) -> 'DataPathNavigator':
+        if self.data is self.default:
+            return self
 
-            delay_generator = fibonacci_backoff()
-            for attempt in range(1, max_attempts + 1):
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as err:
-                    if attempt == max_attempts:
-                        raise err
-                    raw_delay = next(delay_generator)
-                    jitter = chaotic_jitter(random.random())
-                    total_delay = raw_delay + jitter
-                    time.sleep(total_delay)
-        return wrapper
-    return decorator
+        try:
+            if isinstance(self.data, dict) and key in self.data:
+                return DataPathNavigator(self.data[key], self.default)
+            elif isinstance(self.data, (list, tuple)) and isinstance(key, int):
+                if 0 <= key < len(self.data):
+                    return DataPathNavigator(self.data[key], self.default)
+        except Exception:
+            pass
+        return DataPathNavigator(self.default, self.default)
+
+    def val(self) -> Any:
+        return self.data
+
+    def items_flat(self) -> Generator[tuple[str, Any], None, None]:
+        """Flattens nested dictionaries into path-tuples and values."""
+        def _flatten(current: Any, path: list[str]) -> Generator[tuple[str, Any], None, None]:
+            if isinstance(current, dict):
+                for k, v in current.items():
+                    yield from _flatten(v, path + [str(k)])
+            elif isinstance(current, (list, tuple)):
+                for i, v in enumerate(current):
+                    yield from _flatten(v, path + [str(i)])
+            else:
+                yield (".".join(path), current)
+
+        if isinstance(self.data, (dict, list, tuple)):
+            yield from _flatten(self.data, [])
+        else:
+            yield ("", self.data)
+
+def wrap_data(data: Any, default: Any = None) -> DataPathNavigator:
+    return DataPathNavigator(data, default)
