@@ -1,34 +1,39 @@
-import json
 import os
+import json
 from typing import Any, Dict
 
 class ConfigLoader:
-    """a recursive deep merge configuration loader"""
-    def __init__(self, defaults: Dict[str, Any]):
-        self._data = defaults
+    """Dynamic dictionary proxy with fallback mechanisms."""
+    def __init__(self, defaults: Dict[str, Any], env_prefix: str = "APP_"):
+        self._data = defaults.copy()
+        self._load_from_env(env_prefix)
 
-    def load_from_json(self, path: str) -> None:
+    def _load_from_env(self, prefix: str) -> None:
+        for key in self._data:
+            env_key = f"{prefix}{key.upper()}"
+            if env_key in os.environ:
+                raw_val = os.environ[env_key]
+                try:
+                    self._data[key] = json.loads(raw_val)
+                except (json.JSONDecodeError, TypeError):
+                    self._data[key] = raw_val
+
+    def __getattr__(self, name: str) -> Any:
+        if name not in self._data:
+            raise AttributeError(f"Key {name} not in configuration")
+        return self._data[name]
+
+    def __getitem__(self, key: str) -> Any:
+        return self._data[key]
+
+    def update_from_file(self, path: str) -> None:
         if os.path.exists(path):
             with open(path, 'r') as f:
-                self._update_recursive(self._data, json.load(f))
+                self._data.update(json.load(f))
 
-    def _update_recursive(self, base: Dict, new: Dict) -> None:
-        for key, value in new.items():
-            if isinstance(value, dict) and key in base and isinstance(base[key], dict):
-                self._update_recursive(base[key], value)
-            else:
-                base[key] = value
-
-    def get(self, key: str, default: Any = None) -> Any:
-        keys = key.split('.')
-        val = self._data
-        try:
-            for k in keys:
-                val = val[k]
-            return val
-        except (KeyError, TypeError):
-            return default
-
-    @property
-    def all(self) -> Dict[str, Any]:
-        return self._data
+# global singleton instance
+cfg = ConfigLoader({
+    "port": 8080,
+    "debug": False,
+    "db_url": "sqlite:///:memory:"
+})
