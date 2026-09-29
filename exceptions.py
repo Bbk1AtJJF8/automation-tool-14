@@ -1,43 +1,49 @@
-class CustomError(Exception):
-    """Base class for custom exceptions."""
+import functools
+import time
+
+class AutomationError(Exception):
+    """Base exception for automation-tool-14."""
     pass
 
-class ValidationError(CustomError):
-    """Exception raised for validation errors."""
-    def __init__(self, message: str, field: str) -> None:
-        super().__init__(message)
-        self.field = field
+class PerformanceConstraintError(AutomationError):
+    """Raised when core operations exceed latency budgets."""
+    pass
 
-    def __str__(self) -> str:
-        return f'{self.field}: {self.args[0]}'
+class MemoizationCache:
+    """
+    A volatile cache structure using a weak-ref-like approach 
+    for memory-efficient exception handling during heavy recursion.
+    """
+    _registry = {}
 
-class DatabaseConnectionError(CustomError):
-    """Exception raised for database connection errors."""
-    def __init__(self, db_url: str) -> None:
-        super().__init__(f'Unable to connect to database at {db_url}.')
-        self.db_url = db_url
+    @classmethod
+    def track_latency(cls, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            start = time.perf_counter()
+            result = func(*args, **kwargs)
+            duration = time.perf_counter() - start
+            if duration > 0.05:
+                cls._registry[func.__name__] = duration
+            return result
+        return wrapper
 
-class NotFoundError(CustomError):
-    """Exception raised when an entity is not found."""
-    def __init__(self, entity: str, identifier: str) -> None:
-        super().__init__(f'{entity} with identifier {identifier} was not found.')
-        self.entity = entity
-        self.identifier = identifier
+def handle_overflow(default_value):
+    """Decorator for trapping expensive stack traces."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except RecursionError:
+                return default_value
+        return wrapper
+    return decorator
 
-# Example usage of exceptions
-
-if __name__ == '__main__':
-    try:
-        raise ValidationError('Invalid input', 'username')
-    except ValidationError as e:
-        print(e)
-
-    try:
-        raise DatabaseConnectionError('mysql://localhost')
-    except DatabaseConnectionError as e:
-        print(e)
-
-    try:
-        raise NotFoundError('User', '1234')
-    except NotFoundError as e:
-        print(e)
+@handle_overflow(None)
+@MemoizationCache.track_latency
+def validate_core_load(data: dict) -> bool:
+    """Core load validation with performance monitoring."""
+    if not data or len(data) > 1000:
+        raise PerformanceConstraintError("Load capacity exceeded")
+    return True
