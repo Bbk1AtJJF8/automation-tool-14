@@ -1,45 +1,29 @@
-"""Helper functions and dynamic pipeline wrappers for data transformations."""
+import time
+import functools
+import random
 
-from typing import Any, Callable, Iterable, List
+def resilient_network_call(max_retries=3, base_delay=1):
+    """Decorator applying exponential backoff with jitter to network functions."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    retries += 1
+                    if retries == max_retries:
+                        raise e
+                    
+                    # Exponential backoff with a sprinkle of randomness
+                    sleep_time = (base_delay * (2 ** (retries - 1))) + (random.random() * 0.5)
+                    time.sleep(sleep_time)
+            return None
+        return wrapper
+    return decorator
 
-
-class Pipeable:
-    """Enables Unix-style pipe syntax (|) for modular automation functions."""
-
-    def __init__(self, function: Callable[..., Any]):
-        self.function = function
-
-    def __ror__(self, left_operand: Any) -> Any:
-        return self.function(left_operand)
-
-    def __call__(self, *args: Any, **kwargs: Any) -> "Pipeable":
-        return Pipeable(lambda x: self.function(x, *args, **kwargs))
-
-
-@Pipeable
-def safe_traverse(target: Any, dot_path: str, fallback: Any = None) -> Any:
-    """Traverses nested dicts or objects via dot-notation path string."""
-    for key in dot_path.split("."):
-        if isinstance(target, dict):
-            target = target.get(key)
-        elif hasattr(target, key):
-            target = getattr(target, key)
-        else:
-            return fallback
-        if target is None:
-            return fallback
-    return target
-
-
-@Pipeable
-def chunk_iterable(iterable: Iterable[Any], size: int) -> List[List[Any]]:
-    """Splits an iterable into fixed-size chunks."""
-    items = list(iterable)
-    if size <= 0:
-        return [items]
-    return [items[i : i + size] for i in range(0, len(items), size)]
-
-
-def first_non_null(*args: Any, default: Any = None) -> Any:
-    """Returns the first non-None argument or fallback default."""
-    return next((val for val in args if val is not None), default)
+# Example usage:
+# @resilient_network_call(max_retries=5)
+# def fetch_data(url):
+#     ... logic ...
