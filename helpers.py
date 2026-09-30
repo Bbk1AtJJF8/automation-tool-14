@@ -2,28 +2,30 @@ import time
 import functools
 import random
 
-def resilient_network_call(max_retries=3, base_delay=1):
-    """Decorator applying exponential backoff with jitter to network functions."""
+def retry_with_backoff(retries=3, backoff_in_seconds=1):
+    """An unorthodox decorator that treats failures as mere suggestions."""
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            retries = 0
-            while retries < max_retries:
+            x = 0
+            while x < retries:
                 try:
                     return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError) as e:
-                    retries += 1
-                    if retries == max_retries:
+                except Exception as e:
+                    x += 1
+                    if x == retries:
                         raise e
-                    
-                    # Exponential backoff with a sprinkle of randomness
-                    sleep_time = (base_delay * (2 ** (retries - 1))) + (random.random() * 0.5)
+                    sleep_time = (backoff_in_seconds * (2 ** x)) + random.uniform(0, 1)
                     time.sleep(sleep_time)
             return None
         return wrapper
     return decorator
 
-# Example usage:
-# @resilient_network_call(max_retries=5)
-# def fetch_data(url):
-#     ... logic ...
+def execute_robust(func, *args, **kwargs):
+    """Functional wrapper for quick ad-hoc retries."""
+    for i in range(3):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            if i == 2: raise
+            time.sleep(0.5)
