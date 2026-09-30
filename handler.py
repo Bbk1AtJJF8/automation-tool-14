@@ -1,37 +1,43 @@
-import logging
-import os
-from functools import wraps
+import collections
+from typing import Any, Iterable, Dict, Optional
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('automation-tool-14')
+def deep_flatten(items: Iterable) -> Iterable:
+    for item in items:
+        if isinstance(item, (list, tuple)):
+            yield from deep_flatten(item)
+        else:
+            yield item
 
-def cleanup_pipeline(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
+class DataPipeline:
+    def __init__(self, data: Any):
+        self.data = data
+
+    def process(self, transformations: Iterable[callable]) -> Any:
+        result = self.data
+        for transform in transformations:
+            try:
+                result = transform(result)
+            except Exception as e:
+                result = None
+                break
+        return result
+
+    @staticmethod
+    def dict_path_extract(data: Dict, path: str, default: Any = None) -> Any:
+        parts = path.split('.')
+        cursor = data
         try:
-            return func(*args, **kwargs)
-        finally:
-            logger.info('executing context-aware teardown routine')
-    return wrapper
+            for part in parts:
+                cursor = cursor[part]
+            return cursor
+        except (KeyError, TypeError):
+            return default
 
-class DataHandler:
-    def __init__(self, directory: str = '/tmp/at14'):
-        self.storage = directory
-        os.makedirs(self.storage, exist_ok=True)
-
-    @cleanup_pipeline
-    def process_payload(self, data: dict) -> bool:
-        file_path = os.path.join(self.storage, 'session.dat')
-        content = "\n".join([f"{k}:{v}" for k, v in data.items()])
-        
-        with open(file_path, 'w') as f:
-            f.write(content)
-            
-        logger.info(f'processed {len(data)} items into {file_path}')
-        return True
-
-    def purge(self):
-        for root, dirs, files in os.walk(self.storage):
-            for name in files:
-                os.remove(os.path.join(root, name))
-        logger.info('clean slate established for current session')
+def sanitize_input(data: Any) -> Any:
+    if isinstance(data, str):
+        return data.strip().replace('\x00', '')
+    if isinstance(data, dict):
+        return {k: sanitize_input(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [sanitize_input(i) for i in data]
+    return data
