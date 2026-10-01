@@ -1,39 +1,36 @@
 import os
-import json
+from pathlib import Path
 from typing import Any, Dict
 
-class ConfigLoader:
-    """Dynamic dictionary proxy with fallback mechanisms."""
-    def __init__(self, defaults: Dict[str, Any], env_prefix: str = "APP_"):
-        self._data = defaults.copy()
-        self._load_from_env(env_prefix)
+class AppConfig:
+    def __init__(self, env_prefix: str = 'ATOOL'):
+        self._env = env_prefix
+        self.settings: Dict[str, Any] = {}
+        self._load_from_env()
 
-    def _load_from_env(self, prefix: str) -> None:
-        for key in self._data:
-            env_key = f"{prefix}{key.upper()}"
-            if env_key in os.environ:
-                raw_val = os.environ[env_key]
-                try:
-                    self._data[key] = json.loads(raw_val)
-                except (json.JSONDecodeError, TypeError):
-                    self._data[key] = raw_val
-
-    def __getattr__(self, name: str) -> Any:
-        if name not in self._data:
-            raise AttributeError(f"Key {name} not in configuration")
-        return self._data[name]
+    def _load_from_env(self) -> None:
+        base_dir = Path(os.getenv(f'{self._env}_HOME', '/tmp/automation-tool-14'))
+        self.settings.update({
+            'root': base_dir,
+            'logs': base_dir / 'logs',
+            'data': base_dir / 'data',
+            'timeout': int(os.getenv(f'{self._env}_TIMEOUT', '30')),
+            'debug': os.getenv(f'{self._env}_DEBUG', 'false').lower() == 'true'
+        })
+        for path in [self.settings['logs'], self.settings['data']]:
+            path.mkdir(parents=True, exist_ok=True)
 
     def __getitem__(self, key: str) -> Any:
-        return self._data[key]
+        return self.settings.get(key)
 
-    def update_from_file(self, path: str) -> None:
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                self._data.update(json.load(f))
+    def __repr__(self) -> str:
+        return f"<Config loaded from {self.settings['root']}>"
 
-# global singleton instance
-cfg = ConfigLoader({
-    "port": 8080,
-    "debug": False,
-    "db_url": "sqlite:///:memory:"
-})
+def get_config() -> AppConfig:
+    if not hasattr(get_config, '_instance'):
+        get_config._instance = AppConfig()
+    return get_config._instance
+
+if __name__ == '__main__':
+    cfg = get_config()
+    print(f'Active config initialized: {cfg}')
