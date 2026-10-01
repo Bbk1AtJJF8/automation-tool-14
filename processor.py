@@ -1,49 +1,59 @@
-import functools
 from typing import Any, Callable, Dict, List, Union
 
-class ProcessPipe:
-    """Creative data processing pipe using bitwise operators for chaining."""
 
-    def __init__(self, step: Callable[[Any], Any] = lambda x: x):
-        self._step = step
+class StreamProcessor:
+    """A fluent pipeline wrapper for nested structural data transformations."""
 
-    def __call__(self, data: Any) -> Any:
-        return self._step(data)
+    def __init__(self, data: Any):
+        self._data = data
 
-    def __or__(self, next_step: Union[Callable, 'ProcessPipe']) -> 'ProcessPipe':
-        func = next_step._step if isinstance(next_step, ProcessPipe) else next_step
-        return ProcessPipe(lambda d: func(self._step(d)))
+    def __or__(self, step: Callable[[Any], Any]) -> "StreamProcessor":
+        return StreamProcessor(step(self._data))
 
-    def __rshift__(self, key_path: str) -> 'ProcessPipe':
-        """Extract deeply nested dictionary key or list index using dot notation."""
-        def extract(data: Any) -> Any:
-            curr = data
-            for key in key_path.split('.'):
-                if isinstance(curr, dict) and key in curr:
-                    curr = curr[key]
-                elif isinstance(curr, (list, tuple)) and key.isdigit():
-                    idx = int(key)
-                    curr = curr[idx] if 0 <= idx < len(curr) else None
-                else:
-                    return None
-            return curr
-        return self | ProcessPipe(extract)
+    def unwrap(self) -> Any:
+        return self._data
 
-def flatten_structure(data: Any, prefix: str = '', sep: str = '/') -> Dict[str, Any]:
-    """Recursively flattens nested dicts and lists into single-level keys."""
-    items: Dict[str, Any] = {}
+
+def flatten_nested_data(
+    data: Union[Dict[str, Any], List[Any]], prefix: str = ""
+) -> Dict[str, Any]:
+    flat = {}
     if isinstance(data, dict):
-        for k, v in data.items():
-            new_key = f"{prefix}{sep}{k}" if prefix else str(k)
-            items.update(flatten_structure(v, new_key, sep=sep))
-    elif isinstance(data, (list, tuple)):
-        for idx, item in enumerate(data):
-            new_key = f"{prefix}{sep}{idx}" if prefix else str(idx)
-            items.update(flatten_structure(item, new_key, sep=sep))
-    else:
-        items[prefix] = data
-    return items
+        for key, val in data.items():
+            new_key = f"{prefix}.{key}" if prefix else str(key)
+            if isinstance(val, (dict, list)):
+                flat.update(flatten_nested_data(val, prefix=new_key))
+            else:
+                flat[new_key] = val
+    elif isinstance(data, list):
+        for idx, val in enumerate(data):
+            new_key = f"{prefix}[{idx}]"
+            if isinstance(val, (dict, list)):
+                flat.update(flatten_nested_data(val, prefix=new_key))
+            else:
+                flat[new_key] = val
+    return flat
 
-def batch_transform(records: List[Dict[str, Any]], pipeline: ProcessPipe) -> List[Any]:
-    """Transforms a stream of records through a custom ProcessPipe pipeline."""
-    return [pipeline(record) for record in records if record is not None]
+
+def coerce_leaf_types(data: Dict[str, Any]) -> Dict[str, Any]:
+    coerced = {}
+    for k, v in data.items():
+        if isinstance(v, str):
+            if v.isdigit():
+                coerced[k] = int(v)
+            elif v.replace(".", "", 1).isdigit() and v.count(".") == 1:
+                coerced[k] = float(v)
+            elif v.lower() in ("true", "false"):
+                coerced[k] = v.lower() == "true"
+            else:
+                coerced[k] = v
+        else:
+            coerced[k] = v
+    return coerced
+
+
+def execute_data_pipeline(raw_payload: Dict[str, Any]) -> Dict[str, Any]:
+    pipeline = (
+        StreamProcessor(raw_payload) | flatten_nested_data | coerce_leaf_types
+    )
+    return pipeline.unwrap()
