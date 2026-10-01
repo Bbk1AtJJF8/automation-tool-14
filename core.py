@@ -1,68 +1,37 @@
-import inspect
-from functools import wraps
-from typing import Any, Callable, Dict, Sequence
+import time
+import functools
+import random
 
+def exponential_backoff(max_retries=3, base_delay=1, factor=2):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            delay = base_delay
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    retries += 1
+                    if retries == max_retries:
+                        raise e
+                    sleep_time = delay * (factor ** (retries - 1)) + random.uniform(0, 0.1)
+                    time.sleep(sleep_time)
+        return wrapper
+    return decorator
 
-class AutomationContext:
-    def __init__(self, **initial_state):
-        self._state = dict(initial_state)
+class NetworkClient:
+    def __init__(self, endpoint):
+        self.endpoint = endpoint
 
-    def __getattr__(self, name: str) -> Any:
-        return self._state.get(name)
+    @exponential_backoff(max_retries=4)
+    def fetch_data(self):
+        print(f"connecting to {self.endpoint}...")
+        if random.random() < 0.7:
+            raise ConnectionError("transient network failure")
+        return {"status": "success", "payload": 42}
 
-    def update(self, **kwargs) -> "AutomationContext":
-        self._state.update(kwargs)
-        return self
-
-
-class TaskRegistry:
-    def __init__(self):
-        self._tasks: Dict[str, Callable] = {}
-
-    def register(self, name: str | None = None):
-        def decorator(func: Callable):
-            task_name = name or func.__name__
-
-            @wraps(func)
-            def wrapper(ctx: AutomationContext, *args, **kwargs):
-                sig = inspect.signature(func)
-                bound_kwargs = {}
-                for param in sig.parameters.values():
-                    if param.name in ctx._state:
-                        bound_kwargs[param.name] = ctx._state[param.name]
-                bound_kwargs.update(kwargs)
-                result = func(ctx, *args, **bound_kwargs)
-                if isinstance(result, dict):
-                    ctx.update(**result)
-                return result
-
-            self._tasks[task_name] = wrapper
-            return wrapper
-
-        return decorator
-
-    def execute_pipeline(self, steps: Sequence[str], ctx: AutomationContext | None = None) -> AutomationContext:
-        context = ctx or AutomationContext()
-        for step in steps:
-            if step not in self._tasks:
-                raise KeyError(f"Task '{step}' not registered")
-            self._tasks[step](context)
-        return context
-
-
-engine = TaskRegistry()
-
-
-@engine.register("load_source")
-def fetch_raw_data(ctx, source_uri="default://stream"):
-    return {"raw_payload": [10, 20, 30, 40], "uri": source_uri}
-
-
-@engine.register("normalize")
-def transform_data(ctx, raw_payload):
-    scaled = [x * 1.5 for x in raw_payload]
-    return {"processed_data": scaled}
-
-
-def run_default_workflow() -> AutomationContext:
-    return engine.execute_pipeline(["load_source", "normalize"])
+if __name__ == '__main__':
+    client = NetworkClient("https://api.example.com")
+    result = client.fetch_data()
+    print(f"final result: {result}")
