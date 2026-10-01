@@ -1,43 +1,52 @@
 # automation-tool-14
 
-A robust, modular Python CLI designed to streamline repetitive task execution across local and remote environments. This tool minimizes boilerplate code by providing a unified interface for file manipulation, system monitoring, and automated scheduling.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+`automation-tool-14` is a lightweight Python library designed to streamline repetitive file operations, API polling, and system notification workflows. By consolidating boilerplate scripting logic into robust, async-ready utility modules, it allows developers to deploy reliable background workers in minutes.
 
 ## Features
 
-*   **Task Orchestration:** Execute complex workflows with custom task dependency trees and concurrency support.
-*   **System Telemetry:** Real-time logging and performance tracking for long-running background processes.
-*   **Extensible Plugins:** Easily integrate custom modules using the provided hook-based Python API.
-*   **Config-Driven:** Manage automation parameters via structured YAML files to ensure environment consistency.
+* **Event-Driven File Watcher:** Monitor target directories for creation, modification, or deletion events and trigger custom Python callbacks.
+* **Resilient API Poller:** Perform scheduled HTTP requests with built-in exponential backoff, retry logic, and JSON payload validation.
+* **Cross-Platform Alerts:** Send native desktop notifications on macOS, Windows, and Linux with zero external system dependencies.
 
 ## Installation
 
-Ensure you have Python 3.9+ installed. It is recommended to use a virtual environment:
+Install the package directly from PyPI using pip:
 
 ```bash
-# Clone the repository
-git clone https://github.com/Developer/automation-tool-14.git
-cd automation-tool-14
-
-# Install dependencies
-pip install -r requirements.txt
+pip install automation-tool-14
 ```
 
-## Usage
+## Quick Start
 
-To initialize a new automation task, use the `run` command followed by your configuration file:
+The following example demonstrates how to monitor a directory for new CSV files and trigger a system notification when one is detected.
 
-```bash
-# Basic task execution
-python main.py run --config config/sample_task.yaml
+```python
+import time
+from automation_tool_14 import FileWatcher, Notifier
 
-# Run with verbose output
-python main.py run --config config/production.yaml --verbose
+# Callback function when a new file is detected
+def process_new_file(filepath):
+    print(f"Detecting file: {filepath}")
+    Notifier.send(
+        title="File Automation", 
+        message=f"Successfully processed {filepath}"
+    )
+
+# Initialize and start the directory watcher
+watcher = FileWatcher(directory="./incoming", pattern="*.csv")
+watcher.on_create(callback=process_new_file)
+
+watcher.start()
+
+try:
+    while True:
+        time.sleep(1)
+except KeyboardInterrupt:
+    watcher.stop()
 ```
-
-For advanced scheduling, you can trigger the tool using system crontabs or as a background service using the `--daemon` flag. View the full documentation in the `/docs` folder for information on creating custom plugins.
 
 ## License
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-
-Distributed under the MIT License. See `LICENSE` for more information.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
