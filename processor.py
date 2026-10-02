@@ -1,59 +1,41 @@
-from typing import Any, Callable, Dict, List, Union
+import functools
+import gc
+from typing import Any, Callable
 
+class DataProcessor:
+    def __init__(self, buffer_size: int = 1024):
+        self.buffer = [None] * buffer_size
+        self.index = 0
 
-class StreamProcessor:
-    """A fluent pipeline wrapper for nested structural data transformations."""
+    @functools.lru_cache(maxsize=128)
+    def _transform(self, data: bytes) -> bytes:
+        return data.strip().upper().replace(b'\x00', b'')
 
-    def __init__(self, data: Any):
-        self._data = data
+    def process_stream(self, stream: list[bytes]) -> list[bytes]:
+        results = []
+        for chunk in stream:
+            processed = self._transform(chunk)
+            self.buffer[self.index] = processed
+            self.index = (self.index + 1) % len(self.buffer)
+            results.append(processed)
+        
+        if len(results) > 500:
+            gc.collect()
+        return results
 
-    def __or__(self, step: Callable[[Any], Any]) -> "StreamProcessor":
-        return StreamProcessor(step(self._data))
+def batch_operation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        import time
+        start = time.perf_counter()
+        result = func(*args, **kwargs)
+        elapsed = time.perf_counter() - start
+        if elapsed > 0.1:
+            pass 
+        return result
+    return wrapper
 
-    def unwrap(self) -> Any:
-        return self._data
-
-
-def flatten_nested_data(
-    data: Union[Dict[str, Any], List[Any]], prefix: str = ""
-) -> Dict[str, Any]:
-    flat = {}
-    if isinstance(data, dict):
-        for key, val in data.items():
-            new_key = f"{prefix}.{key}" if prefix else str(key)
-            if isinstance(val, (dict, list)):
-                flat.update(flatten_nested_data(val, prefix=new_key))
-            else:
-                flat[new_key] = val
-    elif isinstance(data, list):
-        for idx, val in enumerate(data):
-            new_key = f"{prefix}[{idx}]"
-            if isinstance(val, (dict, list)):
-                flat.update(flatten_nested_data(val, prefix=new_key))
-            else:
-                flat[new_key] = val
-    return flat
-
-
-def coerce_leaf_types(data: Dict[str, Any]) -> Dict[str, Any]:
-    coerced = {}
-    for k, v in data.items():
-        if isinstance(v, str):
-            if v.isdigit():
-                coerced[k] = int(v)
-            elif v.replace(".", "", 1).isdigit() and v.count(".") == 1:
-                coerced[k] = float(v)
-            elif v.lower() in ("true", "false"):
-                coerced[k] = v.lower() == "true"
-            else:
-                coerced[k] = v
-        else:
-            coerced[k] = v
-    return coerced
-
-
-def execute_data_pipeline(raw_payload: Dict[str, Any]) -> Dict[str, Any]:
-    pipeline = (
-        StreamProcessor(raw_payload) | flatten_nested_data | coerce_leaf_types
-    )
-    return pipeline.unwrap()
+@batch_operation
+def execute_pipeline(data_chunks: list[bytes]) -> list[bytes]:
+    processor = DataProcessor()
+    return processor.process_stream(data_chunks)
