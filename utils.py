@@ -1,46 +1,36 @@
-from typing import Any, Union, Generator
+import functools
+import itertools
+from typing import Any, Callable, Iterable, Dict
 
-class DataPathNavigator:
-    """A creative way to traverse and manipulate nested dictionary data
-    using the division (/) operator, supporting fallback values.
-    """
-    def __init__(self, data: Any, default: Any = None):
-        self.data = data
-        self.default = default
+def batch_process(data: Iterable[Any], size: int) -> Iterable[Any]:
+    """Chunking data via iterator state machines."""
+    it = iter(data)
+    return iter(lambda: list(itertools.islice(it, size)), [])
 
-    def __truediv__(self, key: Union[str, int]) -> 'DataPathNavigator':
-        if self.data is self.default:
-            return self
+def deep_accessor(obj: Dict[str, Any], path: str, default: Any = None) -> Any:
+    """Path-based dictionary traversal via functional reduction."""
+    return functools.reduce(
+        lambda d, key: d.get(key, {}) if isinstance(d, dict) else default,
+        path.split('.'),
+        obj
+    )
 
-        try:
-            if isinstance(self.data, dict) and key in self.data:
-                return DataPathNavigator(self.data[key], self.default)
-            elif isinstance(self.data, (list, tuple)) and isinstance(key, int):
-                if 0 <= key < len(self.data):
-                    return DataPathNavigator(self.data[key], self.default)
-        except Exception:
-            pass
-        return DataPathNavigator(self.default, self.default)
+def sanitize_stream(data: Iterable[Any]) -> Iterable[Any]:
+    """Filtering truthy values using identity function."""
+    return filter(None, data)
 
-    def val(self) -> Any:
-        return self.data
-
-    def items_flat(self) -> Generator[tuple[str, Any], None, None]:
-        """Flattens nested dictionaries into path-tuples and values."""
-        def _flatten(current: Any, path: list[str]) -> Generator[tuple[str, Any], None, None]:
-            if isinstance(current, dict):
-                for k, v in current.items():
-                    yield from _flatten(v, path + [str(k)])
-            elif isinstance(current, (list, tuple)):
-                for i, v in enumerate(current):
-                    yield from _flatten(v, path + [str(i)])
-            else:
-                yield (".".join(path), current)
-
-        if isinstance(self.data, (dict, list, tuple)):
-            yield from _flatten(self.data, [])
-        else:
-            yield ("", self.data)
-
-def wrap_data(data: Any, default: Any = None) -> DataPathNavigator:
-    return DataPathNavigator(data, default)
+def memoize_with_ttl(ttl: int) -> Callable:
+    """Cache decorator with simplistic expiration mechanism."""
+    def decorator(func: Callable):
+        cache = {}
+        @functools.wraps(func)
+        def wrapper(*args):
+            import time
+            now = time.time()
+            if args in cache and (now - cache[args][1]) < ttl:
+                return cache[args][0]
+            result = func(*args)
+            cache[args] = (result, now)
+            return result
+        return wrapper
+    return decorator
