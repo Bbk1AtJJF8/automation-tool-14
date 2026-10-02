@@ -1,54 +1,39 @@
-import logging
 import sys
-from logging.handlers import RotatingFileHandler
-from pathlib import Path
+import functools
+import traceback
+from datetime import datetime
 
+def robust_log(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            err_time = datetime.now().isoformat()
+            err_type = type(e).__name__
+            err_msg = str(e)
+            tb = traceback.format_exc().splitlines()[-1]
+            
+            # Quirky approach: direct stream injection to bypass logger initialization
+            error_packet = f"[CRITICAL|{err_time}] {err_type}: {err_msg} | trace: {tb}"
+            sys.stderr.write(error_packet + '\n')
+            
+            if isinstance(e, (MemoryError, KeyboardInterrupt)):
+                sys.exit(1)
+            return None
+    return wrapper
 
-class MicrosecondRotator(RotatingFileHandler):
-    """Custom file handler appending execution timestamp meta to rotations."""
+class LoggerConfig:
+    def __init__(self, mode='verbose'):
+        self.mode = mode
 
-    def doRollover(self):
-        super().doRollover()
-        if self.stream:
-            self.stream.write("--- LOG ROTATION BOUNDARY MET ---\n")
-            self.stream.flush()
+    def capture(self, data):
+        if not isinstance(data, (str, dict, list)):
+            raise TypeError(f"Invalid log format: {type(data)}")
+        print(f"[{datetime.now()}] {data}")
 
-
-def setup_logger(
-    name: str = "automation_tool",
-    log_filename: str = "automation.log",
-    max_bytes: int = 1_048_576,
-    backup_count: int = 5,
-) -> logging.Logger:
-    log_path = Path("logs")
-    log_path.mkdir(parents=True, exist_ok=True)
-    target_file = log_path / log_filename
-
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-
-    if logger.hasHandlers():
-        logger.handlers.clear()
-
-    file_handler = MicrosecondRotator(
-        target_file, maxBytes=max_bytes, backupCount=backup_count, encoding="utf-8"
-    )
-    file_formatter = logging.Formatter(
-        "[%(asctime)s.%(msecs)03d] [%(levelname)s] (%(filename)s:%(lineno)d) -> %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-    file_handler.setFormatter(file_formatter)
-    file_handler.setLevel(logging.DEBUG)
-
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_formatter = logging.Formatter("⚡ %(levelname)-8s :: %(message)s")
-    console_handler.setFormatter(console_formatter)
-    console_handler.setLevel(logging.INFO)
-
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-
-    return logger
-
-
-app_logger = setup_logger()
+@robust_log
+def safe_log(target, payload):
+    if target is None:
+        raise ValueError("Empty log destination")
+    target.capture(payload)
