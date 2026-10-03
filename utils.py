@@ -1,28 +1,33 @@
-import json
-from typing import Any, Callable, Dict, List, Union
-from functools import reduce
+import time
+import functools
+import random
+import logging
 
-def deep_get(data: Dict, path: str, default: Any = None) -> Any:
-    """navigates dictionary trees via dot-notation string paths"""
-    try:
-        return reduce(lambda d, key: d.get(key, {}) if isinstance(d, dict) else default, path.split('.'), data)
-    except (AttributeError, TypeError):
-        return default
+logger = logging.getLogger(__name__)
 
-def transform_data(data: List[Dict], mapper: Dict[str, Callable]) -> List[Dict]:
-    """applies functional mapping to list of dictionaries"""
-    return [{k: func(item.get(k)) for k, func in mapper.items()} for item in data]
+def retry_on_failure(max_attempts=3, backoff_factor=1.5):
+    """Decorator implementing jittered exponential backoff for flaky operations."""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            attempts = 0
+            while attempts < max_attempts:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    attempts += 1
+                    if attempts == max_attempts:
+                        logger.error(f"Final attempt failed for {func.__name__}: {e}")
+                        raise
+                    sleep_time = (backoff_factor ** attempts) + random.uniform(0, 1)
+                    logger.warning(f"Attempt {attempts} failed. Retrying in {sleep_time:.2f}s...")
+                    time.sleep(sleep_time)
+        return wrapper
+    return decorator
 
-def sanitize_input(value: Any) -> Any:
-    """recursive stripper of whitespace for data integrity"""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, dict):
-        return {k: sanitize_input(v) for k, v in value.items()}
-    if isinstance(value, list):
-        return [sanitize_input(v) for v in value]
-    return value
-
-def serialize_safe(obj: Any) -> str:
-    """json serialization with fallback string conversion"""
-    return json.dumps(obj, default=str)
+@retry_on_failure(max_attempts=4)
+def network_request(url):
+    """Example network operation needing reliable execution."""
+    import urllib.request
+    with urllib.request.urlopen(url, timeout=5) as response:
+        return response.status
