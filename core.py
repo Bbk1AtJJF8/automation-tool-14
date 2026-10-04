@@ -1,37 +1,42 @@
-import time
 import functools
-import random
+import time
+import threading
 
-def exponential_backoff(max_retries=3, base_delay=1, factor=2):
-    def decorator(func):
+class PerformanceOptimizer:
+    def __init__(self):
+        self._memo = {}
+        self._lock = threading.Lock()
+
+    def turbo_cache(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            retries = 0
-            delay = base_delay
-            while retries < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    retries += 1
-                    if retries == max_retries:
-                        raise e
-                    sleep_time = delay * (factor ** (retries - 1)) + random.uniform(0, 0.1)
-                    time.sleep(sleep_time)
+            key = (func.__name__, args, frozenset(kwargs.items()))
+            with self._lock:
+                if key not in self._memo:
+                    self._memo[key] = func(*args, **kwargs)
+                return self._memo[key]
         return wrapper
-    return decorator
 
-class NetworkClient:
-    def __init__(self, endpoint):
-        self.endpoint = endpoint
+optimizer = PerformanceOptimizer()
 
-    @exponential_backoff(max_retries=4)
-    def fetch_data(self):
-        print(f"connecting to {self.endpoint}...")
-        if random.random() < 0.7:
-            raise ConnectionError("transient network failure")
-        return {"status": "success", "payload": 42}
+@optimizer.turbo_cache
+def heavy_computation(n):
+    time.sleep(0.1)
+    return sum(i * i for i in range(n))
+
+class CoreEngine:
+    def __init__(self):
+        self.data_store = []
+
+    def process_batch(self, items):
+        # Using list comprehension with pre-allocation via map for speed
+        return list(map(lambda x: heavy_computation(x % 1000), items))
+
+    def clear_cache(self):
+        with optimizer._lock:
+            optimizer._memo.clear()
 
 if __name__ == '__main__':
-    client = NetworkClient("https://api.example.com")
-    result = client.fetch_data()
-    print(f"final result: {result}")
+    engine = CoreEngine()
+    results = engine.process_batch([10, 20, 10, 30])
+    print(f'Execution completed: {results}')
