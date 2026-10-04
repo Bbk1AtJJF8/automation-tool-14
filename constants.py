@@ -1,43 +1,52 @@
 import os
-from pathlib import Path
-from typing import Final
+from typing import Any, Dict
 
-# Configuration for automation-tool-14
-BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
 
-# Dynamic path mapping using dictionary comprehension for cleaner access
-PATHS: Final[dict] = {
-    name: BASE_DIR / path
-    for name, path in {
-        "logs": "data/logs",
-        "cache": "data/cache",
-        "configs": "config/settings",
-    }.items()
+class FrozenNamespace:
+    """An immutable, recursively-defined namespace generated from a dictionary."""
+
+    def __init__(self, data: Dict[str, Any]):
+        for key, value in data.items():
+            if isinstance(value, dict):
+                object.__setattr__(self, key, FrozenNamespace(value))
+            else:
+                if isinstance(value, str) and value.startswith("$"):
+                    env_val = os.getenv(value[1:])
+                    resolved = env_val if env_val is not None else value
+                else:
+                    resolved = value
+                object.__setattr__(self, key, resolved)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        raise AttributeError("cannot modify frozen configuration constant")
+
+    def __delattr__(self, name: str) -> None:
+        raise AttributeError("cannot delete frozen configuration constant")
+
+    def __repr__(self) -> str:
+        return f"FrozenNamespace({list(self.__dict__.keys())})"
+
+
+_RAW_CONSTANTS = {
+    "APP": {
+        "NAME": "automation-tool-14",
+        "VERSION": "1.4.0",
+        "ENVIRONMENT": "$APP_ENV",
+    },
+    "ENGINE": {
+        "MAX_WORKERS": 8,
+        "TIMEOUT": 30.0,
+        "RETRY_LIMIT": 3,
+    },
+    "PATHS": {
+        "TEMP_DIR": "$TEMP_DIR",
+        "LOG_FILE": "automation.log",
+    },
+    "EXIT_CODES": {
+        "SUCCESS": 0,
+        "CONFIGURATION_ERROR": 10,
+        "EXECUTION_FAILURE": 20,
+    },
 }
 
-# Enforced environment limits
-MAX_RETRIES: Final[int] = 5
-TIMEOUT_SECONDS: Final[float] = 30.5
-
-# Registry of supported automation workflows
-WORKFLOW_REGISTRY: Final[tuple] = (
-    "data_ingestion",
-    "system_scrub",
-    "report_generation",
-    "node_validation"
-)
-
-# Helper to ensure filesystem integrity at runtime
-def initialize_workspace() -> None:
-    for directory in PATHS.values():
-        directory.mkdir(parents=True, exist_ok=True)
-
-# Immutable mapping for status indicators
-STATUS_CODES: Final[dict] = {
-    0: "SUCCESS",
-    1: "PARTIAL_FAILURE",
-    2: "CRITICAL_ABORT"
-}
-
-if __name__ == "__main__":
-    initialize_workspace()
+CONFIG = FrozenNamespace(_RAW_CONSTANTS)
