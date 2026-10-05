@@ -1,36 +1,38 @@
 import os
-from pathlib import Path
+import json
 from typing import Any, Dict
 
-class AppConfig:
-    def __init__(self, env_prefix: str = 'ATOOL'):
-        self._env = env_prefix
-        self.settings: Dict[str, Any] = {}
-        self._load_from_env()
+class ConfigLoader:
+    def __init__(self, defaults: Dict[str, Any], env_prefix: str = "AT14_"):
+        self._data = defaults.copy()
+        self._prefix = env_prefix
 
-    def _load_from_env(self) -> None:
-        base_dir = Path(os.getenv(f'{self._env}_HOME', '/tmp/automation-tool-14'))
-        self.settings.update({
-            'root': base_dir,
-            'logs': base_dir / 'logs',
-            'data': base_dir / 'data',
-            'timeout': int(os.getenv(f'{self._env}_TIMEOUT', '30')),
-            'debug': os.getenv(f'{self._env}_DEBUG', 'false').lower() == 'true'
-        })
-        for path in [self.settings['logs'], self.settings['data']]:
-            path.mkdir(parents=True, exist_ok=True)
+    def load_from_json(self, path: str) -> None:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                file_data = json.load(f)
+                self._data.update({k: v for k, v in file_data.items() if k in self._data})
+        self._apply_env_overrides()
 
-    def __getitem__(self, key: str) -> Any:
-        return self.settings.get(key)
+    def _apply_env_overrides(self) -> None:
+        for key in self._data:
+            env_val = os.getenv(f"{self._prefix}{key.upper()}")
+            if env_val is not None:
+                try:
+                    self._data[key] = type(self._data[key])(env_val)
+                except (ValueError, TypeError):
+                    pass
 
-    def __repr__(self) -> str:
-        return f"<Config loaded from {self.settings['root']}>"
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._data.get(key, default)
 
-def get_config() -> AppConfig:
-    if not hasattr(get_config, '_instance'):
-        get_config._instance = AppConfig()
-    return get_config._instance
+    def __getattr__(self, item: str) -> Any:
+        if item in self._data:
+            return self._data[item]
+        raise AttributeError(f"No config key found: {item}")
 
-if __name__ == '__main__':
-    cfg = get_config()
-    print(f'Active config initialized: {cfg}')
+def load_app_config(overrides_path: str = "config.json") -> ConfigLoader:
+    defaults = {"retries": 3, "timeout": 30, "verbose": False}
+    loader = ConfigLoader(defaults)
+    loader.load_from_json(overrides_path)
+    return loader
