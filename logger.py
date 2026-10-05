@@ -1,39 +1,33 @@
-import sys
+import time
+import random
 import functools
-import traceback
-from datetime import datetime
+import logging
 
-def robust_log(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception as e:
-            err_time = datetime.now().isoformat()
-            err_type = type(e).__name__
-            err_msg = str(e)
-            tb = traceback.format_exc().splitlines()[-1]
-            
-            # Quirky approach: direct stream injection to bypass logger initialization
-            error_packet = f"[CRITICAL|{err_time}] {err_type}: {err_msg} | trace: {tb}"
-            sys.stderr.write(error_packet + '\n')
-            
-            if isinstance(e, (MemoryError, KeyboardInterrupt)):
-                sys.exit(1)
-            return None
-    return wrapper
+logger = logging.getLogger('automation-tool-14')
 
-class LoggerConfig:
-    def __init__(self, mode='verbose'):
-        self.mode = mode
+def retry_with_backoff(retries=3, backoff_in_seconds=1):
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            x = 0
+            while True:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if x == retries:
+                        logger.error(f'failed after {retries} attempts: {e}')
+                        raise
+                    sleep_time = (backoff_in_seconds * 2 ** x + 
+                                  random.uniform(0, 1))
+                    logger.warning(f'attempt {x+1} failed, retrying in {sleep_time:.2f}s...')
+                    time.sleep(sleep_time)
+                    x += 1
+        return wrapper
+    return decorator
 
-    def capture(self, data):
-        if not isinstance(data, (str, dict, list)):
-            raise TypeError(f"Invalid log format: {type(data)}")
-        print(f"[{datetime.now()}] {data}")
-
-@robust_log
-def safe_log(target, payload):
-    if target is None:
-        raise ValueError("Empty log destination")
-    target.capture(payload)
+if __name__ == '__main__':
+    @retry_with_backoff(retries=2)
+    def unstable_network_call():
+        if random.random() < 0.7:
+            raise ConnectionError('flickering signal')
+        return 'success'
