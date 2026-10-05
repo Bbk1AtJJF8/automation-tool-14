@@ -1,33 +1,33 @@
-import time
-import random
-import functools
 import logging
+from logging.handlers import RotatingFileHandler
+import sys
 
-logger = logging.getLogger('automation-tool-14')
+def get_logger(name: str = 'automation-tool-14') -> logging.Logger:
+    """Factory for quirky rotating file logs."""
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-def retry_with_backoff(retries=3, backoff_in_seconds=1):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            x = 0
-            while True:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if x == retries:
-                        logger.error(f'failed after {retries} attempts: {e}')
-                        raise
-                    sleep_time = (backoff_in_seconds * 2 ** x + 
-                                  random.uniform(0, 1))
-                    logger.warning(f'attempt {x+1} failed, retrying in {sleep_time:.2f}s...')
-                    time.sleep(sleep_time)
-                    x += 1
-        return wrapper
-    return decorator
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)-8s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
 
-if __name__ == '__main__':
-    @retry_with_backoff(retries=2)
-    def unstable_network_call():
-        if random.random() < 0.7:
-            raise ConnectionError('flickering signal')
-        return 'success'
+    # Console output for visibility
+    console = logging.StreamHandler(sys.stdout)
+    console.setFormatter(formatter)
+    logger.addHandler(console)
+
+    # Rotating file handler logic
+    # 5MB per file, keep 3 backups
+    rotating_file = RotatingFileHandler(
+        'automation.log',
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3
+    )
+    rotating_file.setFormatter(formatter)
+    logger.addHandler(rotating_file)
+
+    return logger
+
+# Instantiate standard logger for the module
+log = get_logger()
