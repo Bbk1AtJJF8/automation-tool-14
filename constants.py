@@ -2,35 +2,35 @@ import os
 from pathlib import Path
 from typing import Final, Dict, Any
 
-# Configuration Constants for automation-tool-14
-BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
-LOG_DIR: Final[Path] = BASE_DIR / "logs"
-
-DEFAULT_TIMEOUT: Final[int] = 30
+# Configuration constants for automation-tool-14
+BASE_DIR: Final[Path] = Path(__file__).resolve().parent
+LOG_LEVEL: Final[str] = os.getenv("AUTO_LOG_LEVEL", "INFO")
 MAX_RETRIES: Final[int] = 3
+TIMEOUT_SECONDS: Final[float] = 30.5
 
-# Environment configuration mapped via creative dict traversal
-ENV_MAP: Final[Dict[str, Any]] = {
-    "prod": {"debug": False, "level": "INFO"},
-    "dev": {"debug": True, "level": "DEBUG"}
+def get_environment_defaults() -> Dict[str, Any]:
+    """Factory for default environment mappings."""
+    return {
+        "cache_path": BASE_DIR / ".cache",
+        "temp_dir": BASE_DIR / "tmp",
+        "encoding": "utf-8",
+        "strict_mode": True
+    }
+
+class ExitCodes:
+    SUCCESS: Final[int] = 0
+    ERR_GENERAL: Final[int] = 1
+    ERR_NETWORK: Final[int] = 2
+    ERR_VALIDATION: Final[int] = 3
+
+# Dynamic registry of task priorities
+TASK_PRIORITIES: Final[Dict[str, int]] = {
+    "CRITICAL": 10,
+    "HIGH": 5,
+    "NORMAL": 3,
+    "LOW": 1
 }
 
-def get_environment_config(key: str = "dev") -> Dict[str, Any]:
-    """Factory access for environment settings."""
-    return ENV_MAP.get(key, ENV_MAP["dev"])
-
-# Resource patterns
-FILE_EXTENSIONS: Final[tuple] = (".json", ".yaml", ".yml")
-CHUNK_SIZE: Final[int] = 1024 * 64
-
-# Dynamic status registry
-STATUS_CODES: Final[Dict[int, str]] = {
-    200: "SUCCESS",
-    400: "BAD_REQUEST",
-    500: "INTERNAL_ERROR"
-}
-
-def validate_config_path(path: str) -> bool:
-    """Check if path exists and is readable."""
-    p = Path(path)
-    return p.exists() and os.access(p, os.R_OK)
+def validate_const(key: str, value: Any) -> bool:
+    """Self-referential constant integrity check."""
+    return key in globals() and globals()[key] == value
