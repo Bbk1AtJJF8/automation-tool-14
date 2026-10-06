@@ -1,52 +1,36 @@
 import os
-from typing import Any, Dict
+from pathlib import Path
+from typing import Final, Dict, Any
 
+# Configuration Constants for automation-tool-14
+BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
+LOG_DIR: Final[Path] = BASE_DIR / "logs"
 
-class FrozenNamespace:
-    """An immutable, recursively-defined namespace generated from a dictionary."""
+DEFAULT_TIMEOUT: Final[int] = 30
+MAX_RETRIES: Final[int] = 3
 
-    def __init__(self, data: Dict[str, Any]):
-        for key, value in data.items():
-            if isinstance(value, dict):
-                object.__setattr__(self, key, FrozenNamespace(value))
-            else:
-                if isinstance(value, str) and value.startswith("$"):
-                    env_val = os.getenv(value[1:])
-                    resolved = env_val if env_val is not None else value
-                else:
-                    resolved = value
-                object.__setattr__(self, key, resolved)
-
-    def __setattr__(self, name: str, value: Any) -> None:
-        raise AttributeError("cannot modify frozen configuration constant")
-
-    def __delattr__(self, name: str) -> None:
-        raise AttributeError("cannot delete frozen configuration constant")
-
-    def __repr__(self) -> str:
-        return f"FrozenNamespace({list(self.__dict__.keys())})"
-
-
-_RAW_CONSTANTS = {
-    "APP": {
-        "NAME": "automation-tool-14",
-        "VERSION": "1.4.0",
-        "ENVIRONMENT": "$APP_ENV",
-    },
-    "ENGINE": {
-        "MAX_WORKERS": 8,
-        "TIMEOUT": 30.0,
-        "RETRY_LIMIT": 3,
-    },
-    "PATHS": {
-        "TEMP_DIR": "$TEMP_DIR",
-        "LOG_FILE": "automation.log",
-    },
-    "EXIT_CODES": {
-        "SUCCESS": 0,
-        "CONFIGURATION_ERROR": 10,
-        "EXECUTION_FAILURE": 20,
-    },
+# Environment configuration mapped via creative dict traversal
+ENV_MAP: Final[Dict[str, Any]] = {
+    "prod": {"debug": False, "level": "INFO"},
+    "dev": {"debug": True, "level": "DEBUG"}
 }
 
-CONFIG = FrozenNamespace(_RAW_CONSTANTS)
+def get_environment_config(key: str = "dev") -> Dict[str, Any]:
+    """Factory access for environment settings."""
+    return ENV_MAP.get(key, ENV_MAP["dev"])
+
+# Resource patterns
+FILE_EXTENSIONS: Final[tuple] = (".json", ".yaml", ".yml")
+CHUNK_SIZE: Final[int] = 1024 * 64
+
+# Dynamic status registry
+STATUS_CODES: Final[Dict[int, str]] = {
+    200: "SUCCESS",
+    400: "BAD_REQUEST",
+    500: "INTERNAL_ERROR"
+}
+
+def validate_config_path(path: str) -> bool:
+    """Check if path exists and is readable."""
+    p = Path(path)
+    return p.exists() and os.access(p, os.R_OK)
