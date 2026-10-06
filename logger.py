@@ -1,33 +1,35 @@
-import logging
-from logging.handlers import RotatingFileHandler
 import sys
+import datetime
+from typing import Any
 
-def get_logger(name: str = 'automation-tool-14') -> logging.Logger:
-    """Factory for quirky rotating file logs."""
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
+class ColorfulLogger:
+    COLORS = {
+        "INFO": "\033[94m",
+        "WARN": "\033[93m",
+        "ERROR": "\033[91m",
+        "RESET": "\033[0m"
+    }
 
-    formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)-8s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    @staticmethod
+    def _format(level: str, message: str) -> str:
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        color = ColorfulLogger.COLORS.get(level, "")
+        return f"{color}[{timestamp}] {level}: {message}{ColorfulLogger.COLORS['RESET']}"
 
-    # Console output for visibility
-    console = logging.StreamHandler(sys.stdout)
-    console.setFormatter(formatter)
-    logger.addHandler(console)
+    def info(self, msg: Any) -> None:
+        print(self._format("INFO", str(msg)))
 
-    # Rotating file handler logic
-    # 5MB per file, keep 3 backups
-    rotating_file = RotatingFileHandler(
-        'automation.log',
-        maxBytes=5 * 1024 * 1024,
-        backupCount=3
-    )
-    rotating_file.setFormatter(formatter)
-    logger.addHandler(rotating_file)
+    def warn(self, msg: Any) -> None:
+        print(self._format("WARN", str(msg)), file=sys.stderr)
 
-    return logger
+    def error(self, msg: Any) -> None:
+        print(self._format("ERROR", str(msg)), file=sys.stderr)
 
-# Instantiate standard logger for the module
-log = get_logger()
+def get_logger() -> ColorfulLogger:
+    return ColorfulLogger()
+
+if __name__ == "__main__":
+    log = get_logger()
+    log.info("System initialized")
+    log.warn("Memory usage creeping up")
+    log.error("Automation sequence failed")
