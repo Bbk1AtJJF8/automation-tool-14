@@ -1,43 +1,28 @@
-import collections
-from typing import Any, Iterable, Dict, Optional
+import time
+import functools
+import random
 
-def deep_flatten(items: Iterable) -> Iterable:
-    for item in items:
-        if isinstance(item, (list, tuple)):
-            yield from deep_flatten(item)
-        else:
-            yield item
+def retry_network_ops(max_attempts=3, backoff_factor=1.5, exceptions=(ConnectionError, TimeoutError)):
+    """Decorator injecting jittery exponential backoff for resilience"""
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = 1.0
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    return func(*args, **kwargs)
+                except exceptions as e:
+                    if attempt == max_attempts:
+                        raise e
+                    jitter = random.uniform(0, 0.1 * delay)
+                    time.sleep(delay + jitter)
+                    delay *= backoff_factor
+        return wrapper
+    return decorator
 
-class DataPipeline:
-    def __init__(self, data: Any):
-        self.data = data
-
-    def process(self, transformations: Iterable[callable]) -> Any:
-        result = self.data
-        for transform in transformations:
-            try:
-                result = transform(result)
-            except Exception as e:
-                result = None
-                break
-        return result
-
-    @staticmethod
-    def dict_path_extract(data: Dict, path: str, default: Any = None) -> Any:
-        parts = path.split('.')
-        cursor = data
-        try:
-            for part in parts:
-                cursor = cursor[part]
-            return cursor
-        except (KeyError, TypeError):
-            return default
-
-def sanitize_input(data: Any) -> Any:
-    if isinstance(data, str):
-        return data.strip().replace('\x00', '')
-    if isinstance(data, dict):
-        return {k: sanitize_input(v) for k, v in data.items()}
-    if isinstance(data, list):
-        return [sanitize_input(i) for i in data]
-    return data
+@retry_network_ops(max_attempts=4)
+def fetch_data(endpoint):
+    # Simulate network instability
+    if random.random() < 0.7:
+        raise ConnectionError("Network flicker occurred")
+    return {"status": "success", "endpoint": endpoint}
