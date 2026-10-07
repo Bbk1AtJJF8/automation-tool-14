@@ -1,33 +1,35 @@
-import time
 import functools
-import random
-import logging
+from typing import Any, Callable, Dict, List, Union
 
-logger = logging.getLogger(__name__)
+def compose_data_processor(*funcs: Callable) -> Callable:
+    """Chain functions as a pipeline for data transformation."""
+    return lambda x: functools.reduce(lambda v, f: f(v), funcs, x)
 
-def retry_on_failure(max_attempts=3, backoff_factor=1.5):
-    """Decorator implementing jittered exponential backoff for flaky operations."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    attempts += 1
-                    if attempts == max_attempts:
-                        logger.error(f"Final attempt failed for {func.__name__}: {e}")
-                        raise
-                    sleep_time = (backoff_factor ** attempts) + random.uniform(0, 1)
-                    logger.warning(f"Attempt {attempts} failed. Retrying in {sleep_time:.2f}s...")
-                    time.sleep(sleep_time)
-        return wrapper
-    return decorator
+def flatten_deep(data: Union[List, Dict]) -> List[Any]:
+    """Recursive flattening of nested structures into a list."""
+    flat = []
+    items = data.values() if isinstance(data, dict) else data
+    for item in items:
+        if isinstance(item, (list, dict)):
+            flat.extend(flatten_deep(item))
+        else:
+            flat.append(item)
+    return flat
 
-@retry_on_failure(max_attempts=4)
-def network_request(url):
-    """Example network operation needing reliable execution."""
-    import urllib.request
-    with urllib.request.urlopen(url, timeout=5) as response:
-        return response.status
+def memoize_data_query(func: Callable) -> Callable:
+    """Cache result of function based on arguments."""
+    cache = {}
+    @functools.wraps(func)
+    def wrapper(*args):
+        if args not in cache:
+            cache[args] = func(*args)
+        return cache[args]
+    return wrapper
+
+def smart_sanitize(data: Any, filter_val: Any = None) -> Any:
+    """Remove all occurrences of a filter value."""
+    if isinstance(data, list):
+        return [smart_sanitize(i, filter_val) for i in data if i != filter_val]
+    if isinstance(data, dict):
+        return {k: smart_sanitize(v, filter_val) for k, v in data.items() if v != filter_val}
+    return data if data != filter_val else None
