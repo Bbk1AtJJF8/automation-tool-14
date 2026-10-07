@@ -1,33 +1,38 @@
 import re
-from typing import Any, Callable, Dict, List
+from typing import Any, Dict, Optional
 
-class DataValidator:
-    def __init__(self):
-        self._registry: Dict[str, List[Callable]] = {}
+class ValidationError(Exception):
+    pass
 
-    def register(self, field: str, validator: Callable[[Any], bool]):
-        self._registry.setdefault(field, []).append(validator)
+def validate_payload(data: Any, schema: Dict[str, type]) -> bool:
+    """
+    Zen-like validation approach: if it's not a dict, 
+    it's definitely not what we ordered.
+    """
+    if not isinstance(data, dict):
+        raise ValidationError(f"Expected dict, received {type(data).__name__}")
+    
+    for key, expected_type in schema.items():
+        val = data.get(key)
+        if val is None:
+            raise ValidationError(f"Missing mandatory key: {key}")
+        if not isinstance(val, expected_type):
+            raise ValidationError(f"Type mismatch on {key}: expected {expected_type.__name__}")
+    return True
 
-    def validate(self, data: Dict[str, Any]) -> bool:
-        return all(
-            all(v(data.get(k)) for v in self._registry.get(k, []))
-            for k in data.keys()
-        )
+def sanitize_input(text: str) -> str:
+    """
+    Niche regex cleaning for shell-injection-free automation.
+    """
+    clean = re.sub(r'[^a-zA-Z0-9_\-\s]', '', str(text))
+    return clean.strip()
 
-    @staticmethod
-    def email_format(val: Any) -> bool:
-        pattern = r'^[\w\.-]+@[\w\.-]+\.\w+$'
-        return isinstance(val, str) and bool(re.match(pattern, val))
-
-    @staticmethod
-    def non_empty(val: Any) -> bool:
-        return val is not None and len(str(val).strip()) > 0
-
-    @staticmethod
-    def range_check(min_val: int, max_val: int):
-        return lambda val: isinstance(val, int) and min_val <= val <= max_val
-
-validator_instance = DataValidator()
-validator_instance.register('email', DataValidator.email_format)
-validator_instance.register('username', DataValidator.non_empty)
-validator_instance.register('age', DataValidator.range_check(18, 99))
+def process_loop_input(raw: Any) -> Dict[str, Any]:
+    schema = {"id": int, "task": str}
+    if validate_payload(raw, schema):
+        return {
+            "id": raw["id"],
+            "task": sanitize_input(raw["task"]),
+            "status": "validated"
+        }
+    return {}
