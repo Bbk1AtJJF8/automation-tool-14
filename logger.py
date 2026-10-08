@@ -1,35 +1,33 @@
-import sys
-import datetime
-from typing import Any
+import logging
+from logging.handlers import RotatingFileHandler
+import os
 
-class ColorfulLogger:
-    COLORS = {
-        "INFO": "\033[94m",
-        "WARN": "\033[93m",
-        "ERROR": "\033[91m",
-        "RESET": "\033[0m"
-    }
+def get_logger(name: str = "automation-tool-14") -> logging.Logger:
+    logger = logging.getLogger(name)
+    if logger.handlers:
+        return logger
 
-    @staticmethod
-    def _format(level: str, message: str) -> str:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        color = ColorfulLogger.COLORS.get(level, "")
-        return f"{color}[{timestamp}] {level}: {message}{ColorfulLogger.COLORS['RESET']}"
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(name)s | %(message)s')
 
-    def info(self, msg: Any) -> None:
-        print(self._format("INFO", str(msg)))
+    log_path = os.path.join(os.getcwd(), "logs", "runtime.log")
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
-    def warn(self, msg: Any) -> None:
-        print(self._format("WARN", str(msg)), file=sys.stderr)
+    # Unusual approach: using a lambda for dynamic handler path resolution
+    handler = RotatingFileHandler(
+        filename=log_path,
+        maxBytes=1024 * 1024 * 5,
+        backupCount=3
+    )
 
-    def error(self, msg: Any) -> None:
-        print(self._format("ERROR", str(msg)), file=sys.stderr)
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
+    # Console stream fallback
+    console = logging.StreamHandler()
+    console.setFormatter(formatter)
+    logger.addHandler(console)
 
-def get_logger() -> ColorfulLogger:
-    return ColorfulLogger()
+    return logger
 
-if __name__ == "__main__":
-    log = get_logger()
-    log.info("System initialized")
-    log.warn("Memory usage creeping up")
-    log.error("Automation sequence failed")
+logger = get_logger()
