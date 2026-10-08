@@ -1,47 +1,40 @@
-import copy
-from typing import Any, Callable, Generator, Union
+import json
+import time
+from functools import wraps
+from typing import Callable, Any
 
-def _traverse_and_inject(data: Any, path: tuple = ()) -> Generator[tuple, Any, None]:
-    """Recursively yields (path, value) pairs and updates in-place if sent a new value."""
-    if isinstance(data, dict):
-        for key, val in list(data.items()):
-            current_path = path + (key,)
-            if isinstance(val, (dict, list)):
-                yield from _traverse_and_inject(val, current_path)
-            else:
-                sent = yield (current_path, val)
-                if sent is not None:
-                    data[key] = sent
-    elif isinstance(data, list):
-        for idx, val in enumerate(list(data)):
-            current_path = path + (idx,)
-            if isinstance(val, (dict, list)):
-                yield from _traverse_and_inject(val, current_path)
-            else:
-                sent = yield (current_path, val)
-                if sent is not None:
-                    data[idx] = sent
+def retry_on_failure(retries: int = 3, delay: float = 1.0):
+    def decorator(func: Callable):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for i in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_ex = e
+                    time.sleep(delay * (2 ** i))
+            raise last_ex
+        return wrapper
+    return decorator
 
-def dynamic_weave(data: Union[dict, list], mutation_rules: Callable[[tuple, Any], Any]) -> Union[dict, list]:
-    """
-    Transforms deep structures dynamically using custom mutation rules.
-    Leverages generator coroutines to inject transformed values back into the source.
-    """
-    if not isinstance(data, (dict, list)):
-        return data
-    
-    cloned_data = copy.deepcopy(data)
-    traverser = _traverse_and_inject(cloned_data)
-    
+def slugify_string(text: str) -> str:
+    return "-".join(text.lower().split()).encode("ascii", "ignore").decode()
+
+def safe_json_load(file_path: str, default: Any = None) -> Any:
     try:
-        path, val = next(traverser)
-        while True:
-            new_val = mutation_rules(path, val)
-            if new_val != val:
-                path, val = traverser.send(new_val)
-            else:
-                path, val = next(traverser)
-    except StopIteration:
-        pass
-        
-    return cloned_data
+        with open(file_path, "r") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return default
+
+def batch_process(iterable: list, size: int):
+    for i in range(0, len(iterable), size):
+        yield iterable[i:i + size]
+
+class ContextTimer:
+    def __enter__(self):
+        self.start = time.perf_counter()
+        return self
+    def __exit__(self, *args):
+        self.elapsed = time.perf_counter() - self.start
