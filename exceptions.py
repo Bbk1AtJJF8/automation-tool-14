@@ -1,33 +1,49 @@
+import sys
+import logging
+from typing import Callable, Any, Optional
+
+logger = logging.getLogger("automation.exceptions")
+
 class AutomationError(Exception):
-    """Base exception class for automation-tool-14"""
+    """Base exception for quirky automation mishaps with self-healing options."""
+    def __init__(self, message: str, mitigation: Optional[Callable[[], Any]] = None):
+        super().__init__(message)
+        self.mitigation = mitigation
+        if self.mitigation:
+            logger.warning(f"Mitigation strategy registered for error: {message}")
+
+    def attempt_recovery(self) -> bool:
+        if not self.mitigation:
+            return False
+        try:
+            logger.info("Attempting dynamic self-healing recovery routine...")
+            self.mitigation()
+            return True
+        except Exception as nested_err:
+            logger.critical(f"Mitigation routine failed spectacularly: {nested_err}")
+            return False
+
+class PhantomTargetError(AutomationError):
+    """Raised when an element exists in a quantum state but not in the UI."""
     pass
 
-class ConfigurationError(AutomationError):
-    """Raised when config validation fails"""
+class FrictionDetectedError(AutomationError):
+    """Raised when progress is slowed down or blocked by excessive latency."""
     pass
 
-class ExecutionError(AutomationError):
-    """Raised during core logic failures"""
-    pass
-
-class ResourceExhaustionError(AutomationError):
-    """Raised when system limits are reached"""
-    pass
-
-def raise_with_context(exc_class, message, context=None):
-    """Creative factory for contextual exceptions"""
-    error = exc_class(f"{message} | Context: {context or 'N/A'}")
-    setattr(error, 'meta', context)
-    raise error
-
-class ExceptionManager:
-    """Centralized handler for exception reporting"""
-    def __init__(self):
-        self.history = []
-
-    def capture(self, e):
-        self.history.append({'type': type(e).__name__, 'msg': str(e)})
-        return True
-
-    def clear(self):
-        self.history = []
+def bulletproof(default_return: Any = None):
+    """Decorator that intercepts exceptions and applies automated mitigation triggers."""
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            try:
+                return func(*args, **kwargs)
+            except AutomationError as err:
+                logger.error(f"Caught automation bottleneck: {err}")
+                if err.attempt_recovery():
+                    try:
+                        return func(*args, **kwargs)
+                    except Exception:
+                        logger.error("Fallback invocation failed post-mitigation.")
+                return default_return
+        return wrapper
+    return decorator
