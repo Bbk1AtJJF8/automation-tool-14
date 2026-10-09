@@ -1,41 +1,24 @@
-import functools
-import gc
-from typing import Any, Callable
+import sys
 
-class DataProcessor:
-    def __init__(self, buffer_size: int = 1024):
-        self.buffer = [None] * buffer_size
-        self.index = 0
+def validate_payload(data):
+    if not isinstance(data, dict):
+        raise TypeError('Payload must be dictionary')
+    if 'id' not in data or not isinstance(data['id'], int):
+        raise ValueError('Invalid or missing numeric id')
+    return True
 
-    @functools.lru_cache(maxsize=128)
-    def _transform(self, data: bytes) -> bytes:
-        return data.strip().upper().replace(b'\x00', b'')
+def process_stream(input_data):
+    results = []
+    for item in input_data:
+        try:
+            if validate_payload(item):
+                results.append(item['id'] * 42)
+        except (TypeError, ValueError) as e:
+            print(f'Skipping malformed entry: {e}', file=sys.stderr)
+            continue
+    return results
 
-    def process_stream(self, stream: list[bytes]) -> list[bytes]:
-        results = []
-        for chunk in stream:
-            processed = self._transform(chunk)
-            self.buffer[self.index] = processed
-            self.index = (self.index + 1) % len(self.buffer)
-            results.append(processed)
-        
-        if len(results) > 500:
-            gc.collect()
-        return results
-
-def batch_operation(func: Callable):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        import time
-        start = time.perf_counter()
-        result = func(*args, **kwargs)
-        elapsed = time.perf_counter() - start
-        if elapsed > 0.1:
-            pass 
-        return result
-    return wrapper
-
-@batch_operation
-def execute_pipeline(data_chunks: list[bytes]) -> list[bytes]:
-    processor = DataProcessor()
-    return processor.process_stream(data_chunks)
+if __name__ == '__main__':
+    raw_input = [{'id': 1}, 'corrupt', {'id': 2}, {'data': 'missing_id'}]
+    processed = process_stream(raw_input)
+    print(f'Final batch: {processed}')
