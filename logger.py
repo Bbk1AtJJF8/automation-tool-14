@@ -2,32 +2,36 @@ import logging
 from logging.handlers import RotatingFileHandler
 import os
 
-def get_logger(name: str = "automation-tool-14") -> logging.Logger:
+def get_automaton_logger(name='automation-tool-14'):
     logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
     if logger.handlers:
         return logger
 
-    logger.setLevel(logging.DEBUG)
-    formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(name)s | %(message)s')
-
-    log_path = os.path.join(os.getcwd(), "logs", "runtime.log")
+    log_path = os.path.join(os.getcwd(), 'logs', f'{name}.log')
     os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
-    # Unusual approach: using a lambda for dynamic handler path resolution
-    handler = RotatingFileHandler(
-        filename=log_path,
-        maxBytes=1024 * 1024 * 5,
-        backupCount=3
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
     )
 
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    
-    # Console stream fallback
-    console = logging.StreamHandler()
-    console.setFormatter(formatter)
-    logger.addHandler(console)
+    file_handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=1048576, 
+        backupCount=5,
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
 
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
+    
     return logger
 
-logger = get_logger()
+# Instantiate for global use via simple injection
+logger = get_automaton_logger()
