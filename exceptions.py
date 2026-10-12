@@ -1,49 +1,34 @@
-import sys
+import functools
 import logging
-from typing import Callable, Any, Optional
-
-logger = logging.getLogger("automation.exceptions")
+from typing import Callable, Any
 
 class AutomationError(Exception):
-    """Base exception for quirky automation mishaps with self-healing options."""
-    def __init__(self, message: str, mitigation: Optional[Callable[[], Any]] = None):
-        super().__init__(message)
-        self.mitigation = mitigation
-        if self.mitigation:
-            logger.warning(f"Mitigation strategy registered for error: {message}")
+    """Base exception for automation-tool-14."""
 
-    def attempt_recovery(self) -> bool:
-        if not self.mitigation:
-            return False
-        try:
-            logger.info("Attempting dynamic self-healing recovery routine...")
-            self.mitigation()
-            return True
-        except Exception as nested_err:
-            logger.critical(f"Mitigation routine failed spectacularly: {nested_err}")
-            return False
+class ConfigurationError(AutomationError):
+    """Raised when tool configuration is malformed."""
 
-class PhantomTargetError(AutomationError):
-    """Raised when an element exists in a quantum state but not in the UI."""
-    pass
+class ExecutionTimeoutError(AutomationError):
+    """Raised when an automated task exceeds time limits."""
 
-class FrictionDetectedError(AutomationError):
-    """Raised when progress is slowed down or blocked by excessive latency."""
-    pass
-
-def bulletproof(default_return: Any = None):
-    """Decorator that intercepts exceptions and applies automated mitigation triggers."""
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+def suppress_errors(logger: logging.Logger) -> Callable:
+    """Decorator for trapping routine automation failures."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
             try:
                 return func(*args, **kwargs)
-            except AutomationError as err:
-                logger.error(f"Caught automation bottleneck: {err}")
-                if err.attempt_recovery():
-                    try:
-                        return func(*args, **kwargs)
-                    except Exception:
-                        logger.error("Fallback invocation failed post-mitigation.")
-                return default_return
+            except Exception as e:
+                logger.error(f"Task failed: {type(e).__name__} - {e}")
+                return None
         return wrapper
     return decorator
+
+class ErrorFactory:
+    """Dynamic generation of context-aware exceptions."""
+    @staticmethod
+    def raise_contextual(message: str, context: str) -> None:
+        full_msg = f"[{context.upper()}] {message}"
+        if "config" in context:
+            raise ConfigurationError(full_msg)
+        raise AutomationError(full_msg)
