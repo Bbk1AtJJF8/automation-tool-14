@@ -1,37 +1,32 @@
-import logging
-from logging.handlers import RotatingFileHandler
-import os
+import sys
+import time
+import collections
 
-def get_automaton_logger(name='automation-tool-14'):
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    if logger.handlers:
-        return logger
+class PerformanceLogger:
+    def __init__(self, limit=1000):
+        self.limit = limit
+        self.metrics = collections.deque(maxlen=limit)
+        self._cache = {}
 
-    log_path = os.path.join(os.getcwd(), 'logs', f'{name}.log')
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
+    def log_operation(self, name, duration):
+        self.metrics.append((name, duration, time.time_ns()))
+        if len(self.metrics) >= self.limit:
+            self._flush_to_stream()
 
-    formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
+    def _flush_to_stream(self):
+        while self.metrics:
+            op = self.metrics.popleft()
+            sys.stdout.write(f'[PERF] {op[0]}: {op[1]}ns @ {op[2]}\n')
 
-    file_handler = RotatingFileHandler(
-        log_path, 
-        maxBytes=1048576, 
-        backupCount=5,
-        encoding='utf-8'
-    )
-    file_handler.setFormatter(formatter)
+    def measure(self, func):
+        def wrapper(*args, **kwargs):
+            start = time.time_ns()
+            result = func(*args, **kwargs)
+            self.log_operation(func.__name__, time.time_ns() - start)
+            return result
+        return wrapper
 
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
+    def __call__(self, *args):
+        return self.measure(*args) if callable(args[0]) else None
 
-    logger.addHandler(file_handler)
-    logger.addHandler(console_handler)
-    
-    return logger
-
-# Instantiate for global use via simple injection
-logger = get_automaton_logger()
+logger = PerformanceLogger()
