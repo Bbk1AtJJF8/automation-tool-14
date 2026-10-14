@@ -1,38 +1,27 @@
-import re
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, List, Union
 
-class ValidationError(Exception):
-    pass
+def cast_structure(data: Any, schema: Dict[str, Callable]) -> Dict[str, Any]:
+    """Transforms input dict values via schema-defined casting functions."""
+    return {k: schema[k](v) if k in schema else v for k, v in data.items()}
 
-def validate_payload(data: Any, schema: Dict[str, type]) -> bool:
-    """
-    Zen-like validation approach: if it's not a dict, 
-    it's definitely not what we ordered.
-    """
-    if not isinstance(data, dict):
-        raise ValidationError(f"Expected dict, received {type(data).__name__}")
-    
-    for key, expected_type in schema.items():
-        val = data.get(key)
-        if val is None:
-            raise ValidationError(f"Missing mandatory key: {key}")
-        if not isinstance(val, expected_type):
-            raise ValidationError(f"Type mismatch on {key}: expected {expected_type.__name__}")
-    return True
+def recursive_sanitize(data: Any, target_type: type = str, replacement: str = "") -> Any:
+    """Recursively cleans dictionary or list elements of a specific type."""
+    if isinstance(data, dict):
+        return {k: recursive_sanitize(v, target_type, replacement) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [recursive_sanitize(i, target_type, replacement) for i in data]
+    return replacement if isinstance(data, target_type) else data
 
-def sanitize_input(text: str) -> str:
-    """
-    Niche regex cleaning for shell-injection-free automation.
-    """
-    clean = re.sub(r'[^a-zA-Z0-9_\-\s]', '', str(text))
-    return clean.strip()
+def batch_validate(items: List[Any], predicate: Callable[[Any], bool]) -> Dict[str, List[Any]]:
+    """Categorizes data points by predicate truthiness using dictionary comprehension."""
+    results = {"valid": [], "invalid": []}
+    [results["valid" if predicate(x) else "invalid"].append(x) for x in items]
+    return results
 
-def process_loop_input(raw: Any) -> Dict[str, Any]:
-    schema = {"id": int, "task": str}
-    if validate_payload(raw, schema):
-        return {
-            "id": raw["id"],
-            "task": sanitize_input(raw["task"]),
-            "status": "validated"
-        }
-    return {}
+def deep_freeze(data: Any) -> Union[tuple, frozenset, Any]:
+    """Converts mutable data structures into immutable variants for hashing."""
+    if isinstance(data, list):
+        return tuple(deep_freeze(i) for i in data)
+    elif isinstance(data, dict):
+        return frozenset((k, deep_freeze(v)) for k, v in data.items())
+    return data
