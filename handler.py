@@ -1,32 +1,54 @@
-import time
-import functools
-import random
+import math
+import logging
+from typing import Callable, Any, List, Tuple
 
-def retry_operation(max_attempts=3, delay=1.0, backoff=2.0):
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            current_delay = delay
-            while attempts < max_attempts:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    attempts += 1
-                    if attempts >= max_attempts:
-                        raise e
-                    time.sleep(current_delay + random.uniform(0, 0.1))
-                    current_delay *= backoff
+logger = logging.getLogger("automation.handler")
+
+
+class EdgeCaseHandler:
+    """Dynamic resilient dispatcher for handling automation edge cases."""
+
+    def __init__(self, fallback_value: Any = None):
+        self.fallback_value = fallback_value
+        self._handlers: List[Tuple[Callable[[Exception], bool], Callable[[Exception], Any]]] = []
+        self._register_default_predicates()
+
+    def register(self, predicate: Callable[[Exception], bool], recovery: Callable[[Exception], Any]):
+        self._handlers.append((predicate, recovery))
+
+    def _register_default_predicates(self):
+        self.register(
+            lambda e: isinstance(e, (ZeroDivisionError, ValueError)) and "math" in str(e).lower(),
+            lambda e: 0.0
+        )
+        self.register(
+            lambda e: isinstance(e, (IndexError, KeyError, TypeError)),
+            lambda e: self.fallback_value
+        )
+        self.register(
+            lambda e: isinstance(e, (OSError, MemoryError)),
+            lambda e: logger.warning("System constraint encountered: %s", e) or self.fallback_value
+        )
+
+    def execute(self, func: Callable, *args: Any, **kwargs: Any) -> Any:
+        try:
+            result = func(*args, **kwargs)
+            if isinstance(result, float) and (math.isnan(result) or math.isinf(result)):
+                raise ValueError("math domain edge case: produced invalid float")
+            return result
+        except Exception as exc:
+            for predicate, recovery in self._handlers:
+                if predicate(exc):
+                    return recovery(exc)
+            logger.error("Unhandled edge case in %s: %s", getattr(func, '__name__', 'callable'), exc)
+            return self.fallback_value
+
+    def wrap(self, func: Callable) -> Callable:
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            return self.execute(func, *args, **kwargs)
         return wrapper
-    return decorator
 
-@retry_operation(max_attempts=3, delay=0.5)
-def fetch_data(url):
-    # Simulate volatile network state
-    if random.random() < 0.7:
-        raise ConnectionError("Transient network glitch")
-    return {"status": "success", "data": [1, 2, 3]}
 
-if __name__ == "__main__":
-    result = fetch_data("https://api.example.com")
-    print(result)
+def safe_run(func: Callable, fallback: Any = None, *args: Any, **kwargs: Any) -> Any:
+    handler = EdgeCaseHandler(fallback_value=fallback)
+    return handler.execute(func, *args, **kwargs)
