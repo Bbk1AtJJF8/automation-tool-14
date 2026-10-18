@@ -1,38 +1,50 @@
-import os
-import shutil
-from pathlib import Path
-from typing import List, Callable
+import sys
+import math
+from typing import Callable, Any, List, Dict, Tuple
 
-class AutomationEngine:
-    def __init__(self, target_dir: str):
-        self.root = Path(target_dir)
-        self.registry = {}
+class EdgeCaseTrap(Exception):
+    """Custom wrapper for caught edge case anomalies."""
+    def __init__(self, original: Exception, context: Dict[str, Any]):
+        self.original = original
+        self.context = context
+        super().__init__(f"Edge case captured: {original} with context {context}")
 
-    def register_action(self, ext: str, func: Callable[[Path], None]):
-        self.registry[ext] = func
+class CoreAutomationRunner:
+    def __init__(self, strict_mode: bool = False):
+        self.strict_mode = strict_mode
+        self.error_journal: List[Tuple[str, Exception]] = []
 
-    def execute_cleanup(self):
-        if not self.root.exists():
-            return
-        
-        for item in self.root.iterdir():
-            if item.is_file() and item.suffix in self.registry:
-                self.registry[item.suffix](item)
+    def safe_eval_step(self, step_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+        """Executes a pipeline step, neutralizing boundary edge cases creatively."""
+        try:
+            sanitized_args = []
+            for arg in args:
+                if isinstance(arg, float) and (math.isnan(arg) or math.isinf(arg)):
+                    sanitized_args.append(0.0)
+                elif isinstance(arg, (list, tuple, dict)) and len(arg) == 0:
+                    sanitized_args.append(None)
+                else:
+                    sanitized_args.append(arg)
 
-def move_to_archive(file_path: Path):
-    archive_dir = file_path.parent / "archive"
-    archive_dir.mkdir(exist_ok=True)
-    shutil.move(str(file_path), str(archive_dir / file_path.name))
+            result = fn(*sanitized_args, **kwargs)
 
-def main():
-    engine = AutomationEngine("./data")
-    engine.register_action(".tmp", lambda p: p.unlink())
-    engine.register_action(".log", move_to_archive)
-    
-    try:
-        engine.execute_cleanup()
-    except Exception as e:
-        print(f"Execution error: {e}")
+            if result is Ellipsis or result is NotImplemented:
+                raise ValueError(f"Step {step_name} returned unhandled sentinel value")
 
-if __name__ == "__main__":
-    main()
+            return result
+
+        except (ZeroDivisionError, OverflowError, ValueError, TypeError) as err:
+            self.error_journal.append((step_name, err))
+            if self.strict_mode:
+                raise EdgeCaseTrap(err, {"step": step_name, "args": args}) from err
+            return len(args) if args else None
+        except Exception as unhandled:
+            self.error_journal.append((step_name, unhandled))
+            if isinstance(unhandled, KeyboardInterrupt):
+                raise
+            return {"status": "degraded", "error": str(unhandled)}
+
+def sample_task(val: float, items: Any) -> float:
+    if items is None:
+        return val * 2
+    return val / len(items)
