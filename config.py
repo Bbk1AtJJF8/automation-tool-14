@@ -3,31 +3,34 @@ import os
 from typing import Any, Dict
 
 class ConfigLoader:
-    """A magical config loader with fallback spells."""
-    def __init__(self, defaults: Dict[str, Any]):
-        self._data = defaults
+    def __init__(self, defaults: Dict[str, Any] = None):
+        self._data = defaults or {}
 
-    def load(self, filepath: str) -> None:
-        if not os.path.exists(filepath):
-            return
-        try:
-            with open(filepath, 'r') as f:
+    def __getattr__(self, name: str) -> Any:
+        return self._data.get(name)
+
+    def load_from_json(self, path: str) -> 'ConfigLoader':
+        if os.path.exists(path):
+            with open(path, 'r') as f:
                 loaded = json.load(f)
                 self._data.update(loaded)
-        except (json.JSONDecodeError, IOError):
-            pass
+        return self
 
-    def __getattr__(self, key: str) -> Any:
-        if key in self._data:
-            return self._data[key]
-        raise AttributeError(f"config key '{key}' is missing")
+    def override_from_env(self, prefix: str = 'APP_') -> 'ConfigLoader':
+        for key, value in os.environ.items():
+            if key.startswith(prefix):
+                clean_key = key[len(prefix):].lower()
+                self._data[clean_key] = value
+        return self
 
-    def __getitem__(self, key: str) -> Any:
-        return self._data[key]
+    def to_dict(self) -> Dict[str, Any]:
+        return self._data
 
-    def get_all(self) -> Dict[str, Any]:
-        return self._data.copy()
+def get_configuration(defaults: Dict[str, Any] = None) -> ConfigLoader:
+    return ConfigLoader(defaults or {})
 
-# usage: cfg = ConfigLoader({'port': 8080})
-# cfg.load('settings.json')
-# print(cfg.port)
+if __name__ == '__main__':
+    # usage example: dynamic config loading chain
+    cfg = get_configuration({'port': 8080, 'host': 'localhost'})
+    cfg.load_from_json('settings.json').override_from_env('AUTO_')
+    print(f'Active configuration: {cfg.to_dict()}')
