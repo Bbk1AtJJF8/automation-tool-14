@@ -1,50 +1,40 @@
-import sys
-import math
-from typing import Callable, Any, List, Dict, Tuple
+import functools
+import time
 
-class EdgeCaseTrap(Exception):
-    """Custom wrapper for caught edge case anomalies."""
-    def __init__(self, original: Exception, context: Dict[str, Any]):
-        self.original = original
-        self.context = context
-        super().__init__(f"Edge case captured: {original} with context {context}")
+class MemoizeWithExpiry:
+    def __init__(self, ttl=60):
+        self.ttl = ttl
+        self.cache = {}
 
-class CoreAutomationRunner:
-    def __init__(self, strict_mode: bool = False):
-        self.strict_mode = strict_mode
-        self.error_journal: List[Tuple[str, Exception]] = []
-
-    def safe_eval_step(self, step_name: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
-        """Executes a pipeline step, neutralizing boundary edge cases creatively."""
-        try:
-            sanitized_args = []
-            for arg in args:
-                if isinstance(arg, float) and (math.isnan(arg) or math.isinf(arg)):
-                    sanitized_args.append(0.0)
-                elif isinstance(arg, (list, tuple, dict)) and len(arg) == 0:
-                    sanitized_args.append(None)
-                else:
-                    sanitized_args.append(arg)
-
-            result = fn(*sanitized_args, **kwargs)
-
-            if result is Ellipsis or result is NotImplemented:
-                raise ValueError(f"Step {step_name} returned unhandled sentinel value")
-
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items()))
+            now = time.time()
+            if key in self.cache:
+                result, timestamp = self.cache[key]
+                if now - timestamp < self.ttl:
+                    return result
+            result = func(*args, **kwargs)
+            self.cache[key] = (result, now)
             return result
+        return wrapper
 
-        except (ZeroDivisionError, OverflowError, ValueError, TypeError) as err:
-            self.error_journal.append((step_name, err))
-            if self.strict_mode:
-                raise EdgeCaseTrap(err, {"step": step_name, "args": args}) from err
-            return len(args) if args else None
-        except Exception as unhandled:
-            self.error_journal.append((step_name, unhandled))
-            if isinstance(unhandled, KeyboardInterrupt):
-                raise
-            return {"status": "degraded", "error": str(unhandled)}
+class PerformanceOptimizer:
+    def __init__(self, limit=1000):
+        self.registry = {}
+        self.limit = limit
 
-def sample_task(val: float, items: Any) -> float:
-    if items is None:
-        return val * 2
-    return val / len(items)
+    def batch_process(self, data, func):
+        if len(data) > self.limit:
+            return self._optimized_chunking(data, func)
+        return [func(item) for item in data]
+
+    def _optimized_chunking(self, data, func):
+        results = []
+        for i in range(0, len(data), self.limit):
+            chunk = data[i:i + self.limit]
+            results.extend(map(func, chunk))
+        return results
+
+core_optimizer = PerformanceOptimizer()
