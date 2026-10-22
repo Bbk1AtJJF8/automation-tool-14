@@ -1,37 +1,46 @@
 # automation-tool-14
 
-A robust, high-performance automation engine designed to streamline repetitive terminal-based workflows. It provides a lightweight framework for executing complex Python-based tasks with minimal overhead and reliable error handling.
+A robust, high-performance automation engine designed to streamline repetitive file system tasks and system workflows. This utility provides a clean, Python-based interface for scheduling complex sequences and reducing manual overhead.
 
 ## Features
 
-*   **Task Scheduling:** Orchestrate recurring operations with a built-in cron-style scheduler that supports millisecond-precision triggers.
-*   **Dynamic Logging:** Real-time stream processing with customizable output levels, allowing you to track execution metrics in JSON or standard text formats.
-*   **Headless Execution:** Fully integrated support for background process management, ensuring tasks persist independently of the active shell session.
-*   **Modular Pipeline:** A plugin-ready architecture that allows developers to inject custom logic into the existing execution flow without modifying the core codebase.
+*   **Task Scheduling:** Execute granular background processes using a lightweight, non-blocking asynchronous event loop.
+*   **File Watcher:** Real-time monitoring of local directories with instant trigger-based response actions for file changes.
+*   **YAML Configuration:** Define complex automation pipelines through human-readable configuration files rather than hardcoded scripts.
+*   **Multi-Platform Support:** Native compatibility across Linux, macOS, and Windows with minimal system dependencies.
 
 ## Installation
 
-Ensure you have Python 3.9+ installed. Clone the repository and install the required dependencies:
+Ensure you have Python 3.9+ installed. You can install `automation-tool-14` directly via pip:
 
 ```bash
+# Clone the repository
 git clone https://github.com/Developer/automation-tool-14.git
 cd automation-tool-14
+
+# Install dependencies
 pip install -r requirements.txt
 ```
 
 ## Usage
 
-To run a predefined task suite, use the primary entry point followed by the configuration file path:
+Create a `config.yaml` in the root directory to define your automation tasks:
 
-```bash
-python main.py --config configs/production.yaml --verbose
+```yaml
+tasks:
+  - name: "Cleanup"
+    path: "./temp"
+    action: "delete"
+    schedule: "0 0 * * *"
 ```
 
-For a quick test of the environment, use the audit flag to verify system compatibility:
+Run the engine to initialize the monitor:
 
 ```bash
-python main.py --audit
+python main.py --config config.yaml --verbose
 ```
+
+The tool will parse the configuration and begin tracking the specified directories according to your defined schedule.
 
 ## License
 
