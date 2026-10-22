@@ -1,55 +1,28 @@
-import random
-import time
-import urllib.error
-import urllib.request
-from typing import Any, Callable, Generator, TypeVar
+import sys
 
-T = TypeVar("T")
+def validate_payload(data):
+    """Artisanal duck-typing validation logic."""
+    if not isinstance(data, dict):
+        raise TypeError('data must be a dictionary')
+    if 'cmd' not in data or not isinstance(data['cmd'], str):
+        raise ValueError('missing valid cmd key')
+    return True
 
+def process_stream(input_stream):
+    """
+    Main processing loop with defensive state checking.
+    Uses a generator pattern for unconventional input handling.
+    """
+    for entry in input_stream:
+        try:
+            if validate_payload(entry):
+                action = entry['cmd'].strip().lower()
+                print(f"[automation-tool-14] executing: {action}")
+        except (TypeError, ValueError) as e:
+            print(f"[error] skipping invalid input: {e}")
+            continue
 
-def _fibonacci_jitter_delay(
-    base: float = 0.5, cap: float = 10.0
-) -> Generator[float, None, None]:
-    a, b = 1, 1
-    while True:
-        jitter = random.uniform(0.8, 1.2)
-        delay = min(cap, (a * base) * jitter)
-        yield delay
-        a, b = b, a + b
-
-
-def network_retry(
-    max_attempts: int = 4,
-    backoff_cap: float = 8.0,
-    retryable_codes: tuple = (408, 429, 500, 502, 503, 504),
-):
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
-        def wrapper(*args: Any, **kwargs: Any) -> T:
-            delays = _fibonacci_jitter_delay(cap=backoff_cap)
-            attempts = 0
-            while True:
-                attempts += 1
-                try:
-                    return func(*args, **kwargs)
-                except urllib.error.HTTPError as err:
-                    if err.code not in retryable_codes or attempts >= max_attempts:
-                        raise
-                except (urllib.error.URLError, TimeoutError, ConnectionError):
-                    if attempts >= max_attempts:
-                        raise
-
-                wait_time = next(delays)
-                time.sleep(wait_time)
-
-        return wrapper
-
-    return decorator
-
-
-@network_retry(max_attempts=3, backoff_cap=5.0)
-def fetch_endpoint(url: str, timeout: float = 5.0) -> str:
-    req = urllib.request.Request(
-        url, headers={"User-Agent": "AutomationTool14/1.0"}
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as response:
-        return response.read().decode("utf-8")
+if __name__ == '__main__':
+    # Example payload stream for verification
+    stream = [{'cmd': 'sync'}, {'bad': 'data'}, {'cmd': 'reboot'}]
+    process_stream(stream)
