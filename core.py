@@ -1,40 +1,34 @@
-import functools
-import time
+from typing import Any, Callable, Dict, List, Union
+from functools import reduce
+import operator
 
-class MemoizeWithExpiry:
-    def __init__(self, ttl=60):
-        self.ttl = ttl
-        self.cache = {}
+def deep_reach(data: Dict, path: str, default: Any = None) -> Any:
+    """navigates nested dictionary structures using dot notation"""
+    try:
+        return reduce(operator.getitem, path.split('.'), data)
+    except (KeyError, TypeError, AttributeError):
+        return default
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = (args, frozenset(kwargs.items()))
-            now = time.time()
-            if key in self.cache:
-                result, timestamp = self.cache[key]
-                if now - timestamp < self.ttl:
-                    return result
-            result = func(*args, **kwargs)
-            self.cache[key] = (result, now)
-            return result
-        return wrapper
+def sanitize_stream(data: List[Union[Dict, Any]], keys: List[str]) -> List[Dict]:
+    """filters dictionary lists keeping only defined keys"""
+    return [{k: v for k, v in item.items() if k in keys} 
+            for item in data if isinstance(item, dict)]
 
-class PerformanceOptimizer:
-    def __init__(self, limit=1000):
-        self.registry = {}
-        self.limit = limit
+def transform_batch(data: List[Dict], mapper: Callable[[Dict], Dict]) -> List[Dict]:
+    """applies functional mapping across data payloads"""
+    return list(map(mapper, data))
 
-    def batch_process(self, data, func):
-        if len(data) > self.limit:
-            return self._optimized_chunking(data, func)
-        return [func(item) for item in data]
+def coalesce_values(*args: Any) -> Any:
+    """returns first non-none value in sequence"""
+    return next((x for x in args if x is not None), None)
 
-    def _optimized_chunking(self, data, func):
-        results = []
-        for i in range(0, len(data), self.limit):
-            chunk = data[i:i + self.limit]
-            results.extend(map(func, chunk))
-        return results
+class DataPipeline:
+    def __init__(self, data: List[Any]):
+        self._payload = data
 
-core_optimizer = PerformanceOptimizer()
+    def __call__(self, pipeline_fn: Callable[[List[Any]], Any]) -> Any:
+        return pipeline_fn(self._payload)
+
+    def flatten(self) -> 'DataPipeline':
+        self._payload = [item for sublist in self._payload for item in sublist]
+        return self
