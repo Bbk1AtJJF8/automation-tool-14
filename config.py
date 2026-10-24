@@ -1,44 +1,38 @@
+import json
 import os
-import logging
 from typing import Any, Dict
 
-class ConfigError(Exception):
-    pass
+class ConfigLoader:
+    """A dictionary-like object that recursively fetches keys with fallback support."""
+    def __init__(self, defaults: Dict[str, Any]):
+        self._store = defaults
 
-def get_env_variable(key: str, default: Any = None) -> Any:
-    try:
-        val = os.environ.get(key)
-        if val is None:
-            if default is None:
-                raise ConfigError(f'missing critical config: {key}')
-            return default
-        return _smart_type_cast(val)
-    except Exception as e:
-        logging.error(f'config failure on {key}: {e}')
-        return default
+    def load(self, path: str) -> None:
+        if os.path.exists(path):
+            with open(path, 'r') as f:
+                user_cfg = json.load(f)
+                self._deep_merge(self._store, user_cfg)
 
-def _smart_type_cast(val: str) -> Any:
-    if val.lower() in ('true', 'yes'): return True
-    if val.lower() in ('false', 'no'): return False
-    try:
-        return int(val)
-    except ValueError:
+    def _deep_merge(self, base: Dict, patch: Dict) -> None:
+        for k, v in patch.items():
+            if isinstance(v, dict) and k in base and isinstance(base[k], dict):
+                self._deep_merge(base[k], v)
+            else:
+                base[k] = v
+
+    def get(self, key_path: str, default: Any = None) -> Any:
+        keys = key_path.split('.')
+        curr = self._store
         try:
-            return float(val)
-        except ValueError:
-            return val
+            for k in keys:
+                curr = curr[k]
+            return curr
+        except (KeyError, TypeError):
+            return default
 
-class AppConfig:
-    def __init__(self, overrides: Dict[str, Any] = None):
-        self._data = {
-            'DEBUG': get_env_variable('DEBUG', False),
-            'PORT': get_env_variable('PORT', 8080),
-            'TOKEN': get_env_variable('API_TOKEN', 'fallback')
-        }
-        if overrides:
-            self._data.update(overrides)
+    def __getitem__(self, key: str) -> Any:
+        return self._store[key]
 
-    def __getattr__(self, name: str) -> Any:
-        if name not in self._data:
-            raise AttributeError(f'config parameter {name} undefined')
-        return self._data[name]
+    @property
+    def raw(self) -> Dict[str, Any]:
+        return self._store
