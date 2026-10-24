@@ -1,32 +1,64 @@
 import sys
-import time
-import collections
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Optional
 
-class PerformanceLogger:
-    def __init__(self, limit=1000):
-        self.limit = limit
-        self.metrics = collections.deque(maxlen=limit)
-        self._cache = {}
 
-    def log_operation(self, name, duration):
-        self.metrics.append((name, duration, time.time_ns()))
-        if len(self.metrics) >= self.limit:
-            self._flush_to_stream()
+class DynamicContextFormatter(logging.Formatter):
+    """Formatter that dynamically computes log context and attaches visual cues."""
 
-    def _flush_to_stream(self):
-        while self.metrics:
-            op = self.metrics.popleft()
-            sys.stdout.write(f'[PERF] {op[0]}: {op[1]}ns @ {op[2]}\n')
+    EMOJI_MAP = {
+        logging.DEBUG: "🔍",
+        logging.INFO: "⚡",
+        logging.WARNING: "⚠️",
+        logging.ERROR: "🚨",
+        logging.CRITICAL: "💥",
+    }
 
-    def measure(self, func):
-        def wrapper(*args, **kwargs):
-            start = time.time_ns()
-            result = func(*args, **kwargs)
-            self.log_operation(func.__name__, time.time_ns() - start)
-            return result
-        return wrapper
+    def format(self, record: logging.LogRecord) -> str:
+        record.icon = self.EMOJI_MAP.get(record.levelno, "📌")
+        return super().format(record)
 
-    def __call__(self, *args):
-        return self.measure(*args) if callable(args[0]) else None
 
-logger = PerformanceLogger()
+def setup_rotating_logger(
+    name: str = "automation_app",
+    log_dir: str = "logs",
+    max_bytes: int = 524_288,  # 512 KB
+    backup_count: int = 3,
+    level: int = logging.INFO,
+) -> logging.Logger:
+    """Configures a robust logger with dynamic formatted size rotation."""
+    target_path = Path(log_dir)
+    target_path.mkdir(parents=True, exist_ok=True)
+    log_file = target_path / f"{name}.log"
+
+    logger = logging.getLogger(name)
+    logger.setLevel(level)
+
+    if logger.hasHandlers():
+        return logger
+
+    format_pattern = "[%(asctime)s] [%(icon)s %(levelname)-8s] %(name)s (%(filename)s:%(lineno)d) -> %(message)s"
+    formatter = DynamicContextFormatter(format_pattern, datefmt="%Y-%m-%d %H:%M:%S")
+
+    file_handler = RotatingFileHandler(
+        filename=log_file,
+        maxBytes=max_bytes,
+        backupCount=backup_count,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(level)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
+    stream_handler.setLevel(level)
+
+    logger.addHandler(file_handler)
+    logger.addHandler(stream_handler)
+
+    return logger
+
+
+app_logger = setup_rotating_logger()
