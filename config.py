@@ -1,38 +1,62 @@
 import json
 import os
-from typing import Any, Dict
+from collections import ChainMap
+from pathlib import Path
+from typing import Any, Dict, Union
+
 
 class ConfigLoader:
-    """A dictionary-like object that recursively fetches keys with fallback support."""
-    def __init__(self, defaults: Dict[str, Any]):
-        self._store = defaults
+    """Dynamic configuration loader using ChainMap and dynamic attribute lookup."""
 
-    def load(self, path: str) -> None:
-        if os.path.exists(path):
-            with open(path, 'r') as f:
-                user_cfg = json.load(f)
-                self._deep_merge(self._store, user_cfg)
+    DEFAULT_CONFIG: Dict[str, Any] = {
+        "app_name": "automation-tool-14",
+        "debug": False,
+        "max_workers": 4,
+        "timeout": 30.0,
+        "log_level": "INFO",
+        "retry_attempts": 3,
+    }
 
-    def _deep_merge(self, base: Dict, patch: Dict) -> None:
-        for k, v in patch.items():
-            if isinstance(v, dict) and k in base and isinstance(base[k], dict):
-                self._deep_merge(base[k], v)
-            else:
-                base[k] = v
+    def __init__(self, config_path: Union[str, Path, None] = None):
+        self._path = Path(config_path) if config_path else None
+        self._user_config = self._load_file()
+        self._env_config = self._load_env()
+        # Prioritizes: Environment variables > File config > Default fallbacks
+        self._store = ChainMap(self._env_config, self._user_config, self.DEFAULT_CONFIG)
 
-    def get(self, key_path: str, default: Any = None) -> Any:
-        keys = key_path.split('.')
-        curr = self._store
-        try:
-            for k in keys:
-                curr = curr[k]
-            return curr
-        except (KeyError, TypeError):
-            return default
+    def _load_file(self) -> Dict[str, Any]:
+        if self._path and self._path.is_file():
+            try:
+                with open(self._path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except json.JSONDecodeError:
+                return {}
+        return {}
 
-    def __getitem__(self, key: str) -> Any:
-        return self._store[key]
+    def _load_env(self) -> Dict[str, Any]:
+        env_data = {}
+        prefix = "APP_"
+        for key, val in os.environ.items():
+            if key.startswith(prefix):
+                clean_key = key[len(prefix) :].lower()
+                if val.lower() in ("true", "false"):
+                    env_data[clean_key] = val.lower() == "true"
+                elif val.isdigit():
+                    env_data[clean_key] = int(val)
+                else:
+                    env_data[clean_key] = val
+        return env_data
 
-    @property
-    def raw(self) -> Dict[str, Any]:
-        return self._store
+    def get(self, key: str, default: Any = None) -> Any:
+        return self._store.get(key, default)
+
+    def __getattr__(self, name: str) -> Any:
+        if name in self._store:
+            return self._store[name]
+        raise AttributeError(f"Configuration option '{name}' not found")
+
+    def __getitem__(self, item: str) -> Any:
+        return self._store[item]
+
+    def __repr__(self) -> str:
+        return f"ConfigLoader(active_keys={list(self._store.keys())})"
