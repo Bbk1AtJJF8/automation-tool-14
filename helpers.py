@@ -1,53 +1,46 @@
-import functools
 import time
-from typing import Any, Callable, Dict, Iterable, List
+import random
+import functools
+from typing import Callable, Any, Tuple, Type, Generator
 
+class RetryExhaustedError(Exception):
+    """Raised when network execution exhausts allowed retry limit."""
+    pass
 
-class Flow:
-    """Lightweight pipeline wrapper enabling bitwise OR operator chaining."""
+def _jittered_backoff(base_delay: float, factor: float, max_delay: float) -> Generator[float, None, None]:
+    """Generator producing exponential backoff intervals with random jitter."""
+    delay = base_delay
+    while True:
+        jitter = random.uniform(0.85, 1.15)
+        yield min(delay * jitter, max_delay)
+        delay *= factor
 
-    def __init__(self, data: Any):
-        self.data = data
-
-    def __or__(self, func: Callable[[Any], Any]) -> "Flow":
-        return Flow(func(self.data))
-
-    def unwrap(self) -> Any:
-        return self.data
-
-
-def auto_retry(retries: int = 3, delay: float = 0.05):
-    """Decorator retrying operations upon unexpected execution failure."""
-    def decorator(func: Callable):
+def network_retry(
+    retries: int = 4,
+    base_delay: float = 0.2,
+    backoff_factor: float = 2.0,
+    max_delay: float = 5.0,
+    retryable_exceptions: Tuple[Type[Exception], ...] = (TimeoutError, ConnectionError, OSError)
+):
+    """Decorator applying dynamic jittered backoff retry strategies to callables."""
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_err = None
-            for _ in range(retries):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            backoff_stream = _jittered_backoff(base_delay, backoff_factor, max_delay)
+            last_exc = None
+            
+            for attempt in range(1, retries + 1):
                 try:
                     return func(*args, **kwargs)
-                except Exception as err:
-                    last_err = err
-                    time.sleep(delay)
-            raise last_err
+                except retryable_exceptions as exc:
+                    last_exc = exc
+                    if attempt == retries:
+                        break
+                    wait_time = next(backoff_stream)
+                    time.sleep(wait_time)
+            
+            raise RetryExhaustedError(
+                f"Target '{func.__name__}' failed after {retries} retries. Cause: {last_exc}"
+            ) from last_exc
         return wrapper
     return decorator
-
-
-def deep_merge(dict_a: Dict, dict_b: Dict) -> Dict:
-    """Recursively merge two nested dictionaries without mutating inputs."""
-    merged = dict(dict_a)
-    for k, v in dict_b.items():
-        if k in merged and isinstance(merged[k], dict) and isinstance(v, dict):
-            merged[k] = deep_merge(merged[k], v)
-        else:
-            merged[k] = v
-    return merged
-
-
-def chunk_sequence(items: Iterable[Any], chunk_size: int) -> List[List[Any]]:
-    """Split an iterable into fixed-length chunk lists."""
-    it = iter(items)
-    result = []
-    while chunk := [e for _, e in zip(range(chunk_size), it)]:
-        result.append(chunk)
-    return result
