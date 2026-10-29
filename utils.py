@@ -1,44 +1,38 @@
-import time
+from typing import TypeVar, Callable, Any, List
 import functools
-import random
 
-def exponential_backoff(retries=3, base_delay=1.0, max_delay=10.0):
-    def decorator(func):
+T = TypeVar('T')
+
+def retry_on_failure(attempts: int = 3) -> Callable[..., Any]:
+    """Decorator for retrying operations with a generic failure handler."""
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            attempts = 0
-            while attempts < retries:
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            last_ex = None
+            for _ in range(attempts):
                 try:
                     return func(*args, **kwargs)
                 except Exception as e:
-                    attempts += 1
-                    if attempts >= retries:
-                        raise e
-                    delay = min(max_delay, base_delay * (2 ** (attempts - 1))) + random.uniform(0, 0.1)
-                    time.sleep(delay)
+                    last_ex = e
+            raise last_ex or RuntimeError("failed after retries")
         return wrapper
     return decorator
 
-class NetworkCircuitBreaker:
-    def __init__(self, failure_threshold=3, recovery_timeout=30):
-        self.threshold = failure_threshold
-        self.timeout = recovery_timeout
-        self.failures = 0
-        self.last_failure_time = 0
+def flatten_nested_data(items: List[Any]) -> List[Any]:
+    """Recursively flattens nested structures using a generator approach."""
+    result: List[Any] = []
+    for item in items:
+        if isinstance(item, list):
+            result.extend(flatten_nested_data(item))
+        else:
+            result.append(item)
+    return result
 
-    def __call__(self, func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            if self.failures >= self.threshold:
-                if time.time() - self.last_failure_time < self.timeout:
-                    raise ConnectionError("Circuit breaker open. Operation blocked.")
-                self.failures = 0
-            try:
-                result = func(*args, **kwargs)
-                self.failures = 0
-                return result
-            except Exception as e:
-                self.failures += 1
-                self.last_failure_time = time.time()
-                raise e
-        return wrapper
+class DataSanitizer:
+    """Unusual context-based sanitizer for string data processing."""
+    def __init__(self, prefix: str = "sanitized_") -> None:
+        self.prefix = prefix
+
+    def clean(self, data: str) -> str:
+        """Applies prefix and strips whitespace in one go."""
+        return f"{self.prefix}{data.strip().lower()}"
