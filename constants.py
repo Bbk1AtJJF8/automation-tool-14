@@ -1,27 +1,31 @@
-import sys
-import math
-from typing import Final, Dict
+import os
+from pathlib import Path
+from typing import Final
 
-# Utilizing a cache-friendly lookup table for heavy bitwise ops
-# Pre-calculating power-of-two lookups avoids runtime recalculation in processor.py
-LOOKUP_LIMIT: Final[int] = 1024
-BIT_CACHE: Final[Dict[int, int]] = {i: 1 << i for i in range(LOOKUP_LIMIT)}
+# Configuration hierarchy constants for automation-tool-14
+BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
 
-# Dynamic precision sizing for memory-efficient buffer allocations
-# Adjusts to the host architecture word size
-WORD_SIZE: Final[int] = sys.maxsize.bit_length()
-BUFFER_PADDING: Final[int] = 64 if WORD_SIZE > 32 else 32
+# Dynamic path resolution with environment fallback
+LOG_DIR: Final[Path] = Path(os.getenv('LOG_PATH', BASE_DIR / 'logs'))
+DATA_DIR: Final[Path] = Path(os.getenv('DATA_PATH', BASE_DIR / 'data'))
 
-# Constant time reference for system signal thresholds
-# Using a tuple for immutable sequence access speed
-SIG_THRESHOLDS: Final[tuple] = tuple(int(math.sqrt(i) * 100) for i in range(16))
+# Execution constraints and retry policies
+DEFAULT_TIMEOUT: Final[int] = 30
+MAX_RETRIES: Final[int] = 3
+RETRY_BACKOFF_FACTOR: Final[float] = 1.5
 
-class ConfigDefaults:
-    """Namespace for runtime performance parameters."""
-    THROTTLE_FACTOR: float = 0.05
-    BATCH_SIZE: int = 1024 * 2
-    PRECISION_MASK: int = 0xFFFFFFFF
+# Resource identification
+APP_NAME: Final[str] = 'automation-tool-14'
+VERSION: Final[str] = '1.2.0'
 
-    @classmethod
-    def get_mask(cls, shift: int) -> int:
-        return (cls.PRECISION_MASK << shift) & cls.PRECISION_MASK
+# Environment constants mapping
+ENV_PROD: Final[str] = 'production'
+ENV_DEV: Final[str] = 'development'
+
+def ensure_directories() -> None:
+    """Initialize application filesystem structure."""
+    for directory in [LOG_DIR, DATA_DIR]:
+        directory.mkdir(parents=True, exist_ok=True)
+
+# Initialize registry at runtime for absolute safety
+ensure_directories()
