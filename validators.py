@@ -1,27 +1,34 @@
-from typing import Any, Callable, Dict, List, Union
+import re
+from typing import Any, Callable
 
-def cast_structure(data: Any, schema: Dict[str, Callable]) -> Dict[str, Any]:
-    """Transforms input dict values via schema-defined casting functions."""
-    return {k: schema[k](v) if k in schema else v for k, v in data.items()}
+def validate_email(email: str) -> bool:
+    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    return bool(re.match(pattern, email))
 
-def recursive_sanitize(data: Any, target_type: type = str, replacement: str = "") -> Any:
-    """Recursively cleans dictionary or list elements of a specific type."""
-    if isinstance(data, dict):
-        return {k: recursive_sanitize(v, target_type, replacement) for k, v in data.items()}
-    elif isinstance(data, list):
-        return [recursive_sanitize(i, target_type, replacement) for i in data]
-    return replacement if isinstance(data, target_type) else data
+def soft_coerce(val: Any, target_type: type, default: Any = None) -> Any:
+    try:
+        return target_type(val)
+    except (ValueError, TypeError):
+        return default
 
-def batch_validate(items: List[Any], predicate: Callable[[Any], bool]) -> Dict[str, List[Any]]:
-    """Categorizes data points by predicate truthiness using dictionary comprehension."""
-    results = {"valid": [], "invalid": []}
-    [results["valid" if predicate(x) else "invalid"].append(x) for x in items]
-    return results
+def chain_validators(value: Any, *validators: Callable[[Any], bool]) -> bool:
+    return all(v(value) for v in validators)
 
-def deep_freeze(data: Any) -> Union[tuple, frozenset, Any]:
-    """Converts mutable data structures into immutable variants for hashing."""
-    if isinstance(data, list):
-        return tuple(deep_freeze(i) for i in data)
-    elif isinstance(data, dict):
-        return frozenset((k, deep_freeze(v)) for k, v in data.items())
-    return data
+def length_range(min_len: int, max_len: int) -> Callable[[str], bool]:
+    def check(s: str) -> bool:
+        return min_len <= len(str(s)) <= max_len
+    return check
+
+def regex_validator(pattern: str) -> Callable[[str], bool]:
+    return lambda s: bool(re.search(pattern, str(s)))
+
+class DataGuard:
+    def __init__(self, data: dict):
+        self.data = data
+
+    def require(self, key: str, validator: Callable[[Any], bool]) -> bool:
+        val = self.data.get(key)
+        return val is not None and validator(val)
+
+def sanitize_alphanumeric(val: str) -> str:
+    return re.sub(r'[^a-zA-Z0-9]', '', str(val))
