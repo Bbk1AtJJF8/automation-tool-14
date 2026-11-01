@@ -1,17 +1,19 @@
 # automation-tool-14
 
-A robust, high-performance automation engine designed to streamline repetitive file system tasks and system workflows. This utility provides a clean, Python-based interface for scheduling complex sequences and reducing manual overhead.
+`automation-tool-14` is a lightweight, high-performance Python framework designed to streamline repetitive administrative tasks and workflow orchestration. It provides a robust command-line interface to manage multi-step processes with minimal configuration.
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Features
 
-*   **Task Scheduling:** Execute granular background processes using a lightweight, non-blocking asynchronous event loop.
-*   **File Watcher:** Real-time monitoring of local directories with instant trigger-based response actions for file changes.
-*   **YAML Configuration:** Define complex automation pipelines through human-readable configuration files rather than hardcoded scripts.
-*   **Multi-Platform Support:** Native compatibility across Linux, macOS, and Windows with minimal system dependencies.
+*   **Task Scheduling:** Execute complex Python scripts or system commands based on customizable cron-like intervals.
+*   **Centralized Logging:** Integrated logging module that captures task output and error states in a structured format for easy debugging.
+*   **Error Recovery:** Built-in retry logic with configurable backoff strategies to handle transient failures in network-dependent tasks.
+*   **Environment Agnostic:** Fully container-ready design that runs seamlessly on bare metal, virtual machines, or Docker environments.
 
 ## Installation
 
-Ensure you have Python 3.9+ installed. You can install `automation-tool-14` directly via pip:
+Ensure you have Python 3.9+ installed. You can install the tool via pip:
 
 ```bash
 # Clone the repository
@@ -20,30 +22,25 @@ cd automation-tool-14
 
 # Install dependencies
 pip install -r requirements.txt
+
+# Run the installation script
+python setup.py install
 ```
 
-## Usage
+## Basic Usage
 
-Create a `config.yaml` in the root directory to define your automation tasks:
-
-```yaml
-tasks:
-  - name: "Cleanup"
-    path: "./temp"
-    action: "delete"
-    schedule: "0 0 * * *"
-```
-
-Run the engine to initialize the monitor:
+After installation, define your tasks in a `tasks.yaml` file and trigger the automation engine using the CLI:
 
 ```bash
-python main.py --config config.yaml --verbose
+# Execute tasks defined in your configuration file
+automation-tool-14 run --config tasks.yaml
+
+# Run a specific task by name with verbose logging
+automation-tool-14 run --task sync_backup --verbose
 ```
 
-The tool will parse the configuration and begin tracking the specified directories according to your defined schedule.
+## Contributing
+We welcome contributions via Pull Requests. Please ensure all new code includes unit tests and follows PEP 8 styling guidelines.
 
 ## License
-
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
