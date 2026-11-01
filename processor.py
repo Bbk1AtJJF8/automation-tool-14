@@ -1,60 +1,57 @@
-import random
-import time
-import urllib.error
-import urllib.request
-from typing import Any, Callable, Generator
+import functools
+from typing import Callable, Any, List, Dict, Tuple
 
+class ReorganizedPipeline:
+    """Self-organizing task pipeline with automated cleanup context."""
 
-def _fibonacci_jitter_backoff(
-    max_retries: int = 4, base_delay: float = 0.5
-) -> Generator[float, None, None]:
-    a, b = base_delay, base_delay
-    for _ in range(max_retries):
-        jitter = random.uniform(0.8, 1.2)
-        yield a * jitter
-        a, b = b, a + b
+    def __init__(self) -> None:
+        self._stages: List[Tuple[int, Callable[..., Any]]] = []
+        self._cleanups: List[Callable[[], None]] = []
 
+    def stage(self, priority: int = 10, defer_cleanup: Callable[[], None] | None = None):
+        def decorator(fn: Callable[..., Any]):
+            @functools.wraps(fn)
+            def wrapped(*args, **kwargs):
+                if defer_cleanup:
+                    self._cleanups.append(defer_cleanup)
+                return fn(*args, **kwargs)
 
-class NetworkProcessor:
-    """Executes network calls with dynamic generator-driven retry strategies."""
+            self._stages.append((priority, wrapped))
+            self._stages.sort(key=lambda x: x[0])
+            return wrapped
+        return decorator
 
-    def __init__(
-        self,
-        backoff_factory: Callable[
-            [], Generator[float, None, None]
-        ] = _fibonacci_jitter_backoff,
-    ):
-        self.backoff_factory = backoff_factory
+    def __call__(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        state = payload.copy()
+        try:
+            for _, stage_func in self._stages:
+                res = stage_func(state)
+                if isinstance(res, dict):
+                    state.update(res)
+        finally:
+            self.flush()
+        return state
 
-    def execute_with_retry(
-        self, url: str, timeout: float = 3.0
-    ) -> dict[str, Any]:
-        delays = self.backoff_factory()
-        attempt = 1
-
-        while True:
+    def flush(self) -> None:
+        while self._cleanups:
+            clean_step = self._cleanups.pop()
             try:
-                req = urllib.request.Request(
-                    url, headers={"User-Agent": "AutomationTool14/1.0"}
-                )
-                with urllib.request.urlopen(req, timeout=timeout) as response:
-                    return {
-                        "status": response.status,
-                        "data": response.read().decode("utf-8"),
-                        "attempts": attempt,
-                    }
-            except (urllib.error.URLError, TimeoutError, OSError) as exc:
-                try:
-                    delay = next(delays)
-                except StopIteration:
-                    raise RuntimeError(
-                        f"Network operation failed after {attempt} attempts: {exc}"
-                    ) from exc
-
-                time.sleep(delay)
-                attempt += 1
+                clean_step()
+            except Exception:
+                pass
 
 
-def fetch_payload(endpoint: str) -> dict[str, Any]:
-    processor = NetworkProcessor()
-    return processor.execute_with_retry(endpoint)
+pipeline = ReorganizedPipeline()
+
+@pipeline.stage(priority=1, defer_cleanup=lambda: None)
+def normalize_payload(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    raw = ctx.get("input", "")
+    return {"normalized": str(raw).strip().lower()}
+
+@pipeline.stage(priority=2)
+def extract_metadata(ctx: Dict[str, Any]) -> Dict[str, Any]:
+    norm = ctx.get("normalized", "")
+    return {"length": len(norm), "words": norm.split()}
+
+def run_processor(data: Dict[str, Any]) -> Dict[str, Any]:
+    return pipeline(data)
