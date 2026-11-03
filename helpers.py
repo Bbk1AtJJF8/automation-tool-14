@@ -1,44 +1,42 @@
-from functools import reduce
-from typing import Any, Callable, Iterable, List, Dict
+import functools
+import time
+import collections
 
+class memoize_with_expiry:
+    def __init__(self, ttl=60):
+        self.ttl = ttl
+        self.cache = {}
 
-class Pipe:
-    """Wrapper enabling pipe syntax (data | Pipe(func)) for fluent data processing."""
-    def __init__(self, func: Callable[..., Any]):
-        self.func = func
+    def __call__(self, func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items()))
+            now = time.time()
+            if key in self.cache:
+                val, timestamp = self.cache[key]
+                if now - timestamp < self.ttl:
+                    return val
+            result = func(*args, **kwargs)
+            self.cache[key] = (result, now)
+            if len(self.cache) > 1000:
+                self.cache.pop(next(iter(self.cache)))
+            return result
+        return wrapper
 
-    def __ror__(self, other: Any) -> Any:
-        return self.func(other)
+@memoize_with_expiry(ttl=30)
+def heavy_computation(n):
+    time.sleep(0.1)
+    return sum(i * i for i in range(n))
 
-    def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.func(*args, **kwargs)
+def batch_process(items, chunk_size=10):
+    for i in range(0, len(items), chunk_size):
+        yield items[i:i + chunk_size]
 
-
-@Pipe
-def flatten_dict(d: Dict[str, Any], parent_key: str = '', sep: str = '.') -> Dict[str, Any]:
-    """Recursively flatten nested dictionaries into single-level dot-notated dicts."""
-    items: List[tuple] = []
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else str(k)
-        if isinstance(v, dict):
-            items.extend(flatten_dict(v, parent_key=new_key, sep=sep).items())
-        else:
-            items.append((new_key, v))
-    return dict(items)
-
-
-@Pipe
-def chunk_stream(iterable: Iterable[Any], size: int = 5) -> List[List[Any]]:
-    """Split an iterable into fixed-size chunks using generator reduction."""
-    lst = list(iterable)
-    return [lst[i:i + size] for i in range(0, len(lst), size)]
-
-
-def coalesce(*args: Any, default: Any = None) -> Any:
-    """Return the first non-None argument or default."""
-    return next((arg for arg in args if arg is not None), default)
-
-
-def execute_pipeline(data: Any, *steps: Callable[[Any], Any]) -> Any:
-    """Execute a sequence of transformations on initial data sequentially."""
-    return reduce(lambda val, func: func(val), steps, data)
+def fast_unique_list(seq):
+    seen = set()
+    result = []
+    for item in seq:
+        if item not in seen:
+            result.append(item)
+            seen.add(item)
+    return result
