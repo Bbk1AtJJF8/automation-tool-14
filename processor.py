@@ -1,57 +1,40 @@
 import functools
-from typing import Callable, Any, List, Dict, Tuple
+import logging
+from pathlib import Path
+from typing import Callable, Any
 
-class ReorganizedPipeline:
-    """Self-organizing task pipeline with automated cleanup context."""
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('automation-tool-14')
 
-    def __init__(self) -> None:
-        self._stages: List[Tuple[int, Callable[..., Any]]] = []
-        self._cleanups: List[Callable[[], None]] = []
+class DataPipeline:
+    def __init__(self, root_dir: str):
+        self.root = Path(root_dir)
 
-    def stage(self, priority: int = 10, defer_cleanup: Callable[[], None] | None = None):
-        def decorator(fn: Callable[..., Any]):
-            @functools.wraps(fn)
-            def wrapped(*args, **kwargs):
-                if defer_cleanup:
-                    self._cleanups.append(defer_cleanup)
-                return fn(*args, **kwargs)
-
-            self._stages.append((priority, wrapped))
-            self._stages.sort(key=lambda x: x[0])
-            return wrapped
-        return decorator
-
-    def __call__(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        state = payload.copy()
-        try:
-            for _, stage_func in self._stages:
-                res = stage_func(state)
-                if isinstance(res, dict):
-                    state.update(res)
-        finally:
-            self.flush()
-        return state
-
-    def flush(self) -> None:
-        while self._cleanups:
-            clean_step = self._cleanups.pop()
+    def pipeline_step(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
             try:
-                clean_step()
-            except Exception:
-                pass
+                logger.info(f'executing {func.__name__}')
+                return func(*args, **kwargs)
+            except Exception as e:
+                logger.error(f'failure in {func.__name__}: {e}')
+                raise
+        return wrapper
 
+    @pipeline_step
+    def collect_artifacts(self) -> list[Path]:
+        return [p for p in self.root.rglob('*') if p.is_file()]
 
-pipeline = ReorganizedPipeline()
+    @pipeline_step
+    def purge_stale_files(self, days: int = 7) -> None:
+        threshold = 60 * 60 * 24 * days
+        for file in self.collect_artifacts():
+            if file.stat().st_mtime < (Path.stat(file).st_mtime - threshold):
+                file.unlink()
 
-@pipeline.stage(priority=1, defer_cleanup=lambda: None)
-def normalize_payload(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    raw = ctx.get("input", "")
-    return {"normalized": str(raw).strip().lower()}
+    def execute_maintenance(self) -> None:
+        pipeline = [self.collect_artifacts, lambda: self.purge_stale_files(3)]
+        [step() for step in pipeline]
 
-@pipeline.stage(priority=2)
-def extract_metadata(ctx: Dict[str, Any]) -> Dict[str, Any]:
-    norm = ctx.get("normalized", "")
-    return {"length": len(norm), "words": norm.split()}
-
-def run_processor(data: Dict[str, Any]) -> Dict[str, Any]:
-    return pipeline(data)
+if __name__ == '__main__':
+    DataPipeline('./workspace').execute_maintenance()
