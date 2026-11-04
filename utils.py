@@ -1,64 +1,52 @@
 from typing import Any, Callable, Dict, List, Union
 
 
-class DataPipe:
-    """Pipelined data transformer using bitwise OR operator overloading."""
+class FlowData:
+    """A wrapper around nested data structures enabling fluid pipeline transformations."""
 
-    def __init__(self, func: Callable[[Any], Any]):
-        self.func = func
+    def __init__(self, data: Any):
+        self.raw = data
 
-    def __ror__(self, data: Any) -> Any:
-        return self.func(data)
+    def select(self, *path_parts: str) -> "FlowData":
+        current = self.raw
+        for part in path_parts:
+            if isinstance(current, dict):
+                current = current.get(part)
+            elif isinstance(current, (list, tuple)) and part.isdigit():
+                idx = int(part)
+                current = current[idx] if 0 <= idx < len(current) else None
+            else:
+                return FlowData(None)
+        return FlowData(current)
 
-    def __or__(self, next_stage: "DataPipe") -> "DataPipe":
-        return DataPipe(lambda x: next_stage.func(self.func(x)))
+    def mutate(self, transform_fn: Callable[[Any], Any]) -> "FlowData":
+        if self.raw is None:
+            return FlowData(None)
+        return FlowData(transform_fn(self.raw))
 
-
-def deep_pluck(*keys: str) -> DataPipe:
-    """Extract nested key paths from complex dicts/lists using dot notation."""
-    def _extract(data: Any) -> List[Any]:
-        results = []
-        for key in keys:
-            parts = key.split(".")
-            current = data
-            for part in parts:
-                if isinstance(current, dict) and part in current:
-                    current = current[part]
-                elif isinstance(current, (list, tuple)) and part.isdigit():
-                    idx = int(part)
-                    current = current[idx] if 0 <= idx < len(current) else None
+    def flatten(self, parent_key: str = "", sep: str = ".") -> Dict[str, Any]:
+        items: List[tuple] = []
+        if isinstance(self.raw, dict):
+            for k, v in self.raw.items():
+                new_key = f"{parent_key}{sep}{k}" if parent_key else str(k)
+                if isinstance(v, dict):
+                    items.extend(FlowData(v).flatten(new_key, sep=sep).items())
                 else:
-                    current = None
-                    break
-            results.append(current)
-        return results
-    return DataPipe(_extract)
+                    items.append((new_key, v))
+        return dict(items)
+
+    def __rshift__(self, fn: Callable[[Any], Any]) -> "FlowData":
+        return self.mutate(fn)
+
+    def __repr__(self) -> str:
+        return f"<FlowData payload={repr(self.raw)}>"
 
 
-def flatten_structure(delimiter: str = "_") -> DataPipe:
-    """Flatten deeply nested data structures into single-level dictionary."""
-    def _flatten(obj: Any, prefix: str = "") -> Dict[str, Any]:
-        items: Dict[str, Any] = {}
-        if isinstance(obj, dict):
-            for k, v in obj.items():
-                new_key = f"{prefix}{delimiter}{k}" if prefix else str(k)
-                items.update(_flatten(v, new_key))
-        elif isinstance(obj, (list, tuple)):
-            for i, v in enumerate(obj):
-                new_key = f"{prefix}{delimiter}{i}" if prefix else str(i)
-                items.update(_flatten(v, new_key))
-        else:
-            items[prefix] = obj
-        return items
-    return DataPipe(_flatten)
-
-
-def sanitize_values(default: Any = None) -> DataPipe:
-    """Clean empty values (None, empty strings, empty containers) recursively."""
-    def _clean(obj: Any) -> Any:
-        if isinstance(obj, dict):
-            return {k: _clean(v) for k, v in obj.items() if v not in (None, "", [], {})}
-        elif isinstance(obj, list):
-            return [_clean(v) for v in obj if v not in (None, "", [], {})]
-        return obj if obj is not None else default
-    return DataPipe(_clean)
+def process_payload(
+    data: Union[dict, list], path: str, transform_fn: Callable = None
+) -> Any:
+    flow = FlowData(data)
+    flow = flow.select(*path.split("."))
+    if transform_fn:
+        flow = flow >> transform_fn
+    return flow.raw
