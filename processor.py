@@ -1,40 +1,73 @@
-import functools
-import logging
-from pathlib import Path
-from typing import Callable, Any
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('automation-tool-14')
 
-class DataPipeline:
-    def __init__(self, root_dir: str):
-        self.root = Path(root_dir)
+class EdgeCaseResilientProcessor:
+    """Automation pipeline processor with adaptive exception boundaries for malformed data."""
 
-    def pipeline_step(func: Callable) -> Callable:
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            try:
-                logger.info(f'executing {func.__name__}')
-                return func(*args, **kwargs)
-            except Exception as e:
-                logger.error(f'failure in {func.__name__}: {e}')
-                raise
-        return wrapper
+    def __init__(self, default_fallbacks: Optional[Dict[type, Any]] = None) -> None:
+        self.fallbacks = default_fallbacks or {
+            ZeroDivisionError: 0.0,
+            KeyError: "MISSING_KEY",
+            TypeError: "",
+            ValueError: None,
+            RecursionError: "MAX_DEPTH_REACHED",
+        }
 
-    @pipeline_step
-    def collect_artifacts(self) -> list[Path]:
-        return [p for p in self.root.rglob('*') if p.is_file()]
+    def guard(self, default_override: Any = ...):
+        """Decorator mapping standard and custom runtime anomalies to safe fallback values."""
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            def wrapper(*args: Any, **kwargs: Any) -> Any:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    if default_override is not Ellipsis:
+                        return default_override
+                    for exc_type, safe_val in self.fallbacks.items():
+                        if isinstance(exc, exc_type):
+                            return safe_val
+                    return f"HANDLED_EXC_{exc.__class__.__name__}"
+            return wrapper
+        return decorator
 
-    @pipeline_step
-    def purge_stale_files(self, days: int = 7) -> None:
-        threshold = 60 * 60 * 24 * days
-        for file in self.collect_artifacts():
-            if file.stat().st_mtime < (Path.stat(file).st_mtime - threshold):
-                file.unlink()
+    def process_item(self, payload: Any, depth: int = 0) -> Any:
+        @self.guard()
+        def _evaluate(val: Any) -> Any:
+            if depth > 15:
+                raise RecursionError("Recursion threshold reached")
+            if isinstance(val, dict):
+                return {k: self.process_item(v, depth + 1) for k, v in val.items()}
+            if isinstance(val, (list, tuple)):
+                return [self.process_item(x, depth + 1) for x in val]
+            if isinstance(val, (int, float)):
+                return 1000 / val
+            if isinstance(val, str) and val.isnumeric():
+                return int(val) * 2
+            return str(val)
 
-    def execute_maintenance(self) -> None:
-        pipeline = [self.collect_artifacts, lambda: self.purge_stale_files(3)]
-        [step() for step in pipeline]
+        return _evaluate(payload)
 
-if __name__ == '__main__':
-    DataPipeline('./workspace').execute_maintenance()
+    def process_pipeline(self, records: List[Dict[str, Any]]) -> Dict[str, Any]:
+        processed_data: List[Any] = []
+        recovery_log: List[Tuple[int, str]] = []
+
+        for index, record in enumerate(records):
+            @self.guard(default_override={"status": "FAILED_RECORD"})
+            def _step() -> Dict[str, Any]:
+                if not isinstance(record, dict):
+                    raise TypeError("Record must be a dictionary")
+                return {
+                    "id": record.get("id", index),
+                    "value": self.process_item(record.get("value")),
+                }
+
+            result = _step()
+            if result == {"status": "FAILED_RECORD"}:
+                recovery_log.append((index, "Non-dict record payload handled"))
+            processed_data.append(result)
+
+        return {
+            "total": len(records),
+            "recovered": len(recovery_log),
+            "results": processed_data,
+            "logs": recovery_log,
+        }
