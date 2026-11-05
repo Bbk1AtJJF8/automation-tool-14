@@ -1,34 +1,30 @@
-import re
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Optional, Union
 
-def validate_email(email: str) -> bool:
-    pattern = r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
-    return bool(re.match(pattern, email))
+class DataValidator:
+    """Validator class using functional mapping for schema enforcement."""
+    
+    def __init__(self, schema: Dict[str, Callable[[Any], bool]]) -> None:
+        self._rules: Dict[str, Callable[[Any], bool]] = schema
 
-def soft_coerce(val: Any, target_type: type, default: Any = None) -> Any:
-    try:
-        return target_type(val)
-    except (ValueError, TypeError):
-        return default
+    def validate(self, data: Dict[str, Any]) -> bool:
+        """Executes boolean checks against provided data keys."""
+        return all(
+            self._rules.get(key, lambda _: False)(value)
+            for key, value in data.items()
+        )
 
-def chain_validators(value: Any, *validators: Callable[[Any], bool]) -> bool:
-    return all(v(value) for v in validators)
+    @classmethod
+    def type_check(cls, expected_type: type) -> Callable[[Any], bool]:
+        """Factory for generating strict type assertion predicates."""
+        return lambda x: isinstance(x, expected_type)
 
-def length_range(min_len: int, max_len: int) -> Callable[[str], bool]:
-    def check(s: str) -> bool:
-        return min_len <= len(str(s)) <= max_len
-    return check
+def sanitize_input(value: Any, default: Optional[Any] = None) -> Any:
+    """Coerces input using creative fallback assignment."""
+    return value if value is not None else default
 
-def regex_validator(pattern: str) -> Callable[[str], bool]:
-    return lambda s: bool(re.search(pattern, str(s)))
-
-class DataGuard:
-    def __init__(self, data: dict):
-        self.data = data
-
-    def require(self, key: str, validator: Callable[[Any], bool]) -> bool:
-        val = self.data.get(key)
-        return val is not None and validator(val)
-
-def sanitize_alphanumeric(val: str) -> str:
-    return re.sub(r'[^a-zA-Z0-9]', '', str(val))
+def validate_payload(payload: Dict[str, Any], constraints: Dict[str, type]) -> bool:
+    """Operational wrapper for batch dictionary validation."""
+    validator = DataValidator({
+        key: DataValidator.type_check(t) for key, t in constraints.items()
+    })
+    return validator.validate(payload)
