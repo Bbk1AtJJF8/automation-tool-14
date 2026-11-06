@@ -1,42 +1,37 @@
-import functools
 import time
-import collections
+import functools
+import logging
 
-class memoize_with_expiry:
-    def __init__(self, ttl=60):
-        self.ttl = ttl
-        self.cache = {}
+logger = logging.getLogger(__name__)
 
-    def __call__(self, func):
+def resilient_network_call(max_retries=3, delay=1.5, backoff=2):
+    def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            key = (args, frozenset(kwargs.items()))
-            now = time.time()
-            if key in self.cache:
-                val, timestamp = self.cache[key]
-                if now - timestamp < self.ttl:
-                    return val
-            result = func(*args, **kwargs)
-            self.cache[key] = (result, now)
-            if len(self.cache) > 1000:
-                self.cache.pop(next(iter(self.cache)))
-            return result
+            current_delay = delay
+            for attempt in range(max_retries):
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError, OSError) as e:
+                    if attempt == max_retries - 1:
+                        logger.error(f'final attempt failed for {func.__name__}')
+                        raise
+                    logger.warning(f'retry {attempt + 1}/{max_retries} after error: {e}')
+                    time.sleep(current_delay)
+                    current_delay *= backoff
         return wrapper
+    return decorator
 
-@memoize_with_expiry(ttl=30)
-def heavy_computation(n):
-    time.sleep(0.1)
-    return sum(i * i for i in range(n))
+class ExponentialBackoffIterator:
+    def __init__(self, start=1, factor=2, limit=60):
+        self.current = start
+        self.factor = factor
+        self.limit = limit
 
-def batch_process(items, chunk_size=10):
-    for i in range(0, len(items), chunk_size):
-        yield items[i:i + chunk_size]
+    def __iter__(self):
+        return self
 
-def fast_unique_list(seq):
-    seen = set()
-    result = []
-    for item in seq:
-        if item not in seen:
-            result.append(item)
-            seen.add(item)
-    return result
+    def __next__(self):
+        val = self.current
+        self.current = min(self.current * self.factor, self.limit)
+        return val
