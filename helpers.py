@@ -1,37 +1,41 @@
-import time
 import functools
-import logging
+import time
+import uuid
+from typing import Callable, Any
 
-logger = logging.getLogger(__name__)
-
-def resilient_network_call(max_retries=3, delay=1.5, backoff=2):
-    def decorator(func):
+def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
+    def decorator(func: Callable):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            current_delay = delay
-            for attempt in range(max_retries):
+            last_exception = None
+            for i in range(max_retries):
                 try:
                     return func(*args, **kwargs)
-                except (ConnectionError, TimeoutError, OSError) as e:
-                    if attempt == max_retries - 1:
-                        logger.error(f'final attempt failed for {func.__name__}')
-                        raise
-                    logger.warning(f'retry {attempt + 1}/{max_retries} after error: {e}')
-                    time.sleep(current_delay)
-                    current_delay *= backoff
+                except Exception as e:
+                    last_exception = e
+                    time.sleep(delay * (2 ** i))
+            raise last_exception
         return wrapper
     return decorator
 
-class ExponentialBackoffIterator:
-    def __init__(self, start=1, factor=2, limit=60):
-        self.current = start
-        self.factor = factor
-        self.limit = limit
+def generate_unique_id(prefix: str = "task") -> str:
+    return f"{prefix}_{uuid.uuid4().hex[:8]}"
 
-    def __iter__(self):
-        return self
+def safe_execute(func: Callable, default: Any = None) -> Callable:
+    def execute(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            return default
+    return execute
 
-    def __next__(self):
-        val = self.current
-        self.current = min(self.current * self.factor, self.limit)
-        return val
+def batch_process(items: list, size: int):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+class DictProxy:
+    def __init__(self, data: dict):
+        self.__dict__.update(data)
+
+    def __repr__(self):
+        return str(self.__dict__)
