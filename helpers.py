@@ -1,47 +1,35 @@
 import functools
-import math
-import random
-import time
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Dict
 
-T = TypeVar("T")
-
-
-class CircuitBreakerOpen(Exception):
-    """Raised when network execution attempt threshold is exceeded."""
-
-
-def retry_with_jitter(
-    retries: int = 4,
-    backoff_factor: float = 1.5,
-    exceptions: tuple[type[BaseException], ...] = (Exception,),
-) -> Callable[[Callable[..., T]], Callable[..., T]]:
-    """Decorator executing network operations with dynamic golden-ratio backoff."""
-
-    def decorator(func: Callable[..., T]) -> Callable[..., T]:
+def validate_inputs(schema: Dict[str, type]):
+    def decorator(func: Callable):
         @functools.wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> T:
-            phi = (1 + math.sqrt(5)) / 2
-            attempt = 0
-            current_delay = 0.2
-
-            while attempt < retries:
-                try:
-                    return func(*args, **kwargs)
-                except exceptions as err:
-                    attempt += 1
-                    if attempt >= retries:
-                        raise CircuitBreakerOpen(
-                            f"Exhausted {retries} retries for '{func.__name__}'"
-                        ) from err
-
-                    jitter = (random.random() * phi - phi / 2) * current_delay
-                    sleep_time = max(0.05, current_delay + jitter)
-                    time.sleep(sleep_time)
-                    current_delay *= backoff_factor
-
-            raise CircuitBreakerOpen(f"Failed to execute '{func.__name__}'")
-
+        def wrapper(*args, **kwargs):
+            combined = {**dict(zip(func.__code__.co_varnames, args)), **kwargs}
+            for key, expected_type in schema.items():
+                if key in combined and not isinstance(combined[key], expected_type):
+                    raise TypeError(f'invalid input {key}: expected {expected_type.__name__}')
+            return func(*args, **kwargs)
         return wrapper
-
     return decorator
+
+class InputSanitizer:
+    def __init__(self):
+        self._rules = []
+
+    def add_rule(self, check: Callable[[Any], bool], error: str):
+        self._rules.append((check, error))
+
+    def verify(self, data: Any):
+        for check, error in self._rules:
+            if not check(data):
+                raise ValueError(f'sanitization failure: {error}')
+        return True
+
+def process_loop_input(data: Any, sanitizer: InputSanitizer):
+    try:
+        sanitizer.verify(data)
+        return True
+    except (ValueError, TypeError) as e:
+        print(f'data flow blocked: {e}')
+        return False
