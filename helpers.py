@@ -1,41 +1,47 @@
 import functools
+import math
+import random
 import time
-import uuid
-from typing import Callable, Any
+from typing import Any, Callable, TypeVar
 
-def retry_on_failure(max_retries: int = 3, delay: float = 1.0):
-    def decorator(func: Callable):
+T = TypeVar("T")
+
+
+class CircuitBreakerOpen(Exception):
+    """Raised when network execution attempt threshold is exceeded."""
+
+
+def retry_with_jitter(
+    retries: int = 4,
+    backoff_factor: float = 1.5,
+    exceptions: tuple[type[BaseException], ...] = (Exception,),
+) -> Callable[[Callable[..., T]], Callable[..., T]]:
+    """Decorator executing network operations with dynamic golden-ratio backoff."""
+
+    def decorator(func: Callable[..., T]) -> Callable[..., T]:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_exception = None
-            for i in range(max_retries):
+        def wrapper(*args: Any, **kwargs: Any) -> T:
+            phi = (1 + math.sqrt(5)) / 2
+            attempt = 0
+            current_delay = 0.2
+
+            while attempt < retries:
                 try:
                     return func(*args, **kwargs)
-                except Exception as e:
-                    last_exception = e
-                    time.sleep(delay * (2 ** i))
-            raise last_exception
+                except exceptions as err:
+                    attempt += 1
+                    if attempt >= retries:
+                        raise CircuitBreakerOpen(
+                            f"Exhausted {retries} retries for '{func.__name__}'"
+                        ) from err
+
+                    jitter = (random.random() * phi - phi / 2) * current_delay
+                    sleep_time = max(0.05, current_delay + jitter)
+                    time.sleep(sleep_time)
+                    current_delay *= backoff_factor
+
+            raise CircuitBreakerOpen(f"Failed to execute '{func.__name__}'")
+
         return wrapper
+
     return decorator
-
-def generate_unique_id(prefix: str = "task") -> str:
-    return f"{prefix}_{uuid.uuid4().hex[:8]}"
-
-def safe_execute(func: Callable, default: Any = None) -> Callable:
-    def execute(*args, **kwargs):
-        try:
-            return func(*args, **kwargs)
-        except Exception:
-            return default
-    return execute
-
-def batch_process(items: list, size: int):
-    for i in range(0, len(items), size):
-        yield items[i:i + size]
-
-class DictProxy:
-    def __init__(self, data: dict):
-        self.__dict__.update(data)
-
-    def __repr__(self):
-        return str(self.__dict__)
