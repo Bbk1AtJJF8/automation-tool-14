@@ -1,40 +1,42 @@
 import logging
-from logging.handlers import RotatingFileHandler
-import os
+import functools
 
-def setup_logger(name='automation-tool-14', log_file='app.log'):
-    """
-    Orchestrates log rotation using a slightly unconventional
-    approach by binding to a custom stream factory.
-    """
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger('automation-tool-14')
 
-    if not logger.handlers:
-        formatter = logging.Formatter(
-            '%(asctime)s | %(levelname)-8s | %(process)d | %(message)s'
-        )
+def validate_inputs(func):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        for i, arg in enumerate(args):
+            if arg is None:
+                logger.error(f'null input detected at position {i}')
+                raise ValueError('invalid argument: None')
+        return func(*args, **kwargs)
+    return wrapper
 
-        # Rotate at 5MB, keep 3 backup files
-        handler = RotatingFileHandler(
-            log_file, 
-            maxBytes=5*1024*1024, 
-            backupCount=3
-        )
+class DataSanitizer:
+    def __init__(self, schema=None):
+        self.schema = schema or {}
+
+    @validate_inputs
+    def process_data(self, data: dict):
+        if not isinstance(data, dict):
+            logger.warning('non-dict payload rejected')
+            return False
         
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        
-        # Add console output for immediate feedback
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
+        # Creative coercion loop
+        for key, expected_type in self.schema.items():
+            val = data.get(key)
+            if val is not None and not isinstance(val, expected_type):
+                try:
+                    data[key] = expected_type(val)
+                except (ValueError, TypeError):
+                    logger.error(f'type mismatch on key {key}')
+                    return False
+        return True
 
-    return logger
-
-if __name__ == '__main__':
-    # Self-test logic
-    log = setup_logger()
-    log.info('System initialization complete')
-    log.debug('This debug message should remain hidden')
-    log.warning('Log rotation mechanism active')
+def log_execution(func):
+    def decorator(*args, **kwargs):
+        logger.info(f'executing {func.__name__} with {len(args)} args')
+        return func(*args, **kwargs)
+    return decorator
