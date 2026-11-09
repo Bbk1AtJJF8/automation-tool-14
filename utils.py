@@ -1,47 +1,31 @@
 import functools
-import time
-import uuid
-from typing import Callable, Any, Dict
+from typing import Any, Callable, Dict, List, Union
 
-def generate_id(prefix: str = 'auto') -> str:
-    return f"{prefix}_{uuid.uuid4().hex[:8]}"
+def morph_data(data: Any, transformation: Callable[[Any], Any] = lambda x: x) -> Any:
+    """recursively traverses structures, applying a function to all leaves"""
+    if isinstance(data, dict):
+        return {k: morph_data(v, transformation) for k, v in data.items()}
+    elif isinstance(data, (list, tuple)):
+        return [morph_data(i, transformation) for i in data]
+    return transformation(data)
 
-def retry_with_backoff(retries: int = 3, delay: float = 1.0):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_ex = None
-            for i in range(retries):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_ex = e
-                    time.sleep(delay * (2 ** i))
-            raise last_ex
-        return wrapper
-    return decorator
+def pluck(data: List[Dict], key: str, default: Any = None) -> List[Any]:
+    """generator-based key extraction for list of dictionaries"""
+    return [item.get(key, default) for item in data if isinstance(item, dict)]
 
-def memoize_with_expiry(ttl: int = 60):
-    cache: Dict[str, tuple] = {}
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            key = str(args) + str(kwargs)
-            now = time.time()
-            if key in cache and now - cache[key][0] < ttl:
-                return cache[key][1]
-            result = func(*args, **kwargs)
-            cache[key] = (now, result)
-            return result
-        return wrapper
-    return decorator
+class DataPipeline:
+    def __init__(self, *funcs: Callable):
+        self.pipeline = funcs
 
-def flatten_dict(d: dict, parent_key: str = '', sep: str = '_') -> dict:
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key, sep=sep).items())
-        else:
-            items.append((new_key, v))
-    return dict(items)
+    def run(self, initial_data: Any) -> Any:
+        """functional composition for sequential data processing"""
+        return functools.reduce(lambda acc, f: f(acc), self.pipeline, initial_data)
+
+def batch_process(items: List[Any], chunk_size: int = 10):
+    """memory-efficient generator for batching large lists"""
+    for i in range(0, len(items), chunk_size):
+        yield items[i:i + chunk_size]
+
+def flatten(nested_list: List[Union[list, Any]]) -> List[Any]:
+    """nested list collapsing using recursive comprehension"""
+    return [item for sublist in nested_list for item in (flatten(sublist) if isinstance(sublist, list) else [sublist])]
