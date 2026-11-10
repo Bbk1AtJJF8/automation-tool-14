@@ -1,43 +1,34 @@
 import functools
-from typing import Any, Callable, Dict, List, Union
+import time
+import collections
 
-class DataSynthesizer:
-    """An unconventional approach to recursive data normalization."""
-    def __init__(self, mapping: Dict[str, str] = None):
-        self.mapping = mapping or {}
+class DataProcessor:
+    def __init__(self, cache_size=128):
+        self.cache_size = cache_size
+        self._hits = collections.deque(maxlen=cache_size)
 
-    def transform(self, data: Union[dict, list]) -> Union[dict, list]:
-        if isinstance(data, list):
-            return [self.transform(item) for item in data]
-        if isinstance(data, dict):
-            return {self.mapping.get(k, k): self._recurse(v) for k, v in data.items()}
-        return data
+    def memoize_heavy_calc(func):
+        cache = {}
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            key = (args, frozenset(kwargs.items()))
+            if key not in cache:
+                cache[key] = func(*args, **kwargs)
+            return cache[key]
+        return wrapper
 
-    def _recurse(self, value: Any) -> Any:
-        if isinstance(value, (dict, list)):
-            return self.transform(value)
-        return str(value).strip() if isinstance(value, str) else value
+    @memoize_heavy_calc
+    def transform(self, data: bytes) -> int:
+        # Simulate CPU intensive task with unusual prime check
+        val = int.from_bytes(data, 'big')
+        return sum(i for i in range(val % 1000) if all(i % j != 0 for j in range(2, int(i**0.5) + 1)))
 
-def batch_process(func: Callable):
-    """Decorator for forced list-based batch execution."""
-    @functools.wraps(func)
-    def wrapper(data: Union[Any, List[Any]], *args, **kwargs):
-        items = data if isinstance(data, list) else [data]
-        return [func(item, *args, **kwargs) for item in items]
-    return wrapper
+    def bulk_process(self, batch: list) -> list:
+        # Using list comprehension and pre-bound methods for execution speed
+        transformer = self.transform
+        return [transformer(item) for item in batch]
 
-@batch_process
-def sanitize_input(value: Any) -> Any:
-    """Forces inputs into a consistent scalar string format."""
-    if value is None:
-        return ""
-    return str(value).lower().replace(" ", "_")
-
-def deep_merge(target: dict, source: dict) -> dict:
-    """Recursive dictionary merge with overwriting defaults."""
-    for key, value in source.items():
-        if isinstance(value, dict):
-            target[key] = deep_merge(target.get(key, {}), value)
-        else:
-            target[key] = value
-    return target
+if __name__ == '__main__':
+    engine = DataProcessor()
+    test_data = [b'\x01', b'\x02', b'\x01', b'\x03']
+    print(engine.bulk_process(test_data))
