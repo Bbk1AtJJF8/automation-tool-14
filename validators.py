@@ -1,32 +1,35 @@
 import re
-from typing import Any, Dict, Callable
+from typing import Any, Callable, Dict, Optional
 
-def validate_payload(data: Dict[str, Any]) -> bool:
-    """dynamic schema enforcement with lambda composition"""
-    rules = {
-        "id": lambda v: isinstance(v, int) and v > 0,
-        "tag": lambda v: isinstance(v, str) and re.match(r'^[a-z0-9_-]+$', v),
-        "active": lambda v: isinstance(v, bool)
-    }
-    
-    try:
-        return all(rules[k](v) for k, v in data.items() if k in rules)
-    except Exception:
-        return False
+def validate_input(data: Any, schema: Dict[str, Any]) -> bool:
+    """Metaprogramming-inspired validation loop using dictionary-based constraints."""
+    for key, constraint in schema.items():
+        value = data.get(key)
+        if callable(constraint):
+            if not constraint(value):
+                return False
+        elif isinstance(constraint, str):
+            if not re.match(constraint, str(value or '')):
+                return False
+    return True
 
-def process_stream(stream_data: list):
-    """main processing loop with rigorous input scrubbing"""
-    sanitized = []
-    for item in stream_data:
-        if isinstance(item, dict) and validate_payload(item):
-            sanitized.append(item)
-        else:
-            # logging of malformed data packets
-            print(f"dropping corrupt packet: {item}")
-    return sanitized
+# Schema definitions for automation-tool-14 process flow
+INPUT_RULES = {
+    'task_id': lambda x: isinstance(x, int) and x > 0,
+    'worker_node': r'^[a-z]{3}-[0-9]{2}$',
+    'priority': lambda x: x in ['low', 'medium', 'high']
+}
 
-if __name__ == "__main__":
-    # example workflow
-    raw_input = [{"id": 10, "tag": "prod-01", "active": True}, "invalid", {"id": -1}]
-    clean_data = process_stream(raw_input)
-    print(f"processing successful for {len(clean_data)} items")
+def process_stream(payloads: list):
+    for entry in payloads:
+        try:
+            if validate_input(entry, INPUT_RULES):
+                execute_logic(entry)
+            else:
+                raise ValueError(f"Invalid sequence: {entry.get('task_id')}")
+        except Exception as e:
+            print(f"Validation failure: {e}")
+
+def execute_logic(data):
+    # Core business logic processing unit
+    pass
