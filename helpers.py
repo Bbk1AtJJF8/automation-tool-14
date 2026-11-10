@@ -1,35 +1,70 @@
 import functools
-from typing import Any, Callable, Dict
+import gc
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
-def validate_inputs(schema: Dict[str, type]):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            combined = {**dict(zip(func.__code__.co_varnames, args)), **kwargs}
-            for key, expected_type in schema.items():
-                if key in combined and not isinstance(combined[key], expected_type):
-                    raise TypeError(f'invalid input {key}: expected {expected_type.__name__}')
-            return func(*args, **kwargs)
-        return wrapper
-    return decorator
 
-class InputSanitizer:
-    def __init__(self):
-        self._rules = []
+class HelperPipeline:
+    """Dynamic helper execution registry with automatic state cleanup."""
 
-    def add_rule(self, check: Callable[[Any], bool], error: str):
-        self._rules.append((check, error))
+    _registry: Dict[str, Callable] = {}
+    _transient_cache: Dict[str, Any] = {}
 
-    def verify(self, data: Any):
-        for check, error in self._rules:
-            if not check(data):
-                raise ValueError(f'sanitization failure: {error}')
-        return True
+    @classmethod
+    def register(cls, alias: Optional[str] = None):
+        def decorator(func: Callable) -> Callable:
+            name = alias or func.__name__
 
-def process_loop_input(data: Any, sanitizer: InputSanitizer):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                result = func(*args, **kwargs)
+                cls._transient_cache[f"{name}_last"] = result
+                return result
+
+            cls._registry[name] = wrapper
+            return wrapper
+
+        return decorator
+
+    @classmethod
+    def purge_transients(cls) -> int:
+        """Reorganizes internal memory state by flushing transient cache."""
+        count = len(cls._transient_cache)
+        cls._transient_cache.clear()
+        gc.collect()
+        return count
+
+    @classmethod
+    def dispatch(cls, step_name: str, *args, **kwargs) -> Any:
+        if step_name not in cls._registry:
+            raise KeyError(f"Helper step '{step_name}' is not registered.")
+        return cls._registry[step_name](*args, **kwargs)
+
+
+@HelperPipeline.register(alias="sanitize_text")
+def _sanitize(text: str) -> str:
+    return " ".join(text.strip().split())
+
+
+@HelperPipeline.register(alias="flatten_dict")
+def _flatten(
+    d: Dict[str, Any], parent_key: str = "", sep: str = "."
+) -> Dict[str, Any]:
+    items: List[Tuple[str, Any]] = []
+    for k, v in d.items():
+        new_key = f"{parent_key}{sep}{k}" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(_flatten(v, new_key, sep=sep).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+
+def execute_sequence(data: Any, sequence: List[str]) -> Any:
+    """Executes a pipeline sequence and reorganizes memory state after."""
+    current = data
     try:
-        sanitizer.verify(data)
-        return True
-    except (ValueError, TypeError) as e:
-        print(f'data flow blocked: {e}')
-        return False
+        for step in sequence:
+            current = HelperPipeline.dispatch(step, current)
+        return current
+    finally:
+        HelperPipeline.purge_transients()
