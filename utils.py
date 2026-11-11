@@ -1,79 +1,39 @@
-"""Dynamic task transformation and pipelining utilities."""
-
-from typing import TypeVar, Callable, Any, Iterable, Generator, Generic
-from functools import wraps, reduce
+import random
 import time
+from functools import wraps
+from typing import Any, Callable, Sequence, Type
 
-T = TypeVar("T")
-R = TypeVar("R")
+class NetworkOperationError(Exception):
+    """Raised when a network operation fails after exhausting all retries."""
 
+def _fibonacci_jitter_sequence(max_attempts: int, initial_delay: float):
+    a, b = initial_delay, initial_delay
+    for _ in range(max_attempts):
+        jitter = random.uniform(0.75, 1.25)
+        yield a * jitter
+        a, b = b, a + b
 
-class PipelineComposer(Generic[T, R]):
-    """A creative pipeline composer that chains callables using the bitwise OR operator.
-
-    Allows assembling data processing stages dynamically:
-        pipe = PipelineComposer(stage1) | stage2 | stage3
-        result = pipe(initial_data)
-    """
-
-    def __init__(self, func: Callable[[T], Any]) -> None:
-        """Initialize the pipeline with a root callable."""
-        self._funcs: list[Callable[[Any], Any]] = [func]
-
-    def __or__(self, next_func: Callable[[Any], Any]) -> "PipelineComposer[T, R]":
-        """Overload `|` operator to append transformation stages."""
-        new_composer: PipelineComposer[T, R] = PipelineComposer(self._funcs[0])
-        new_composer._funcs = self._funcs + [next_func]
-        return new_composer
-
-    def __call__(self, initial_value: T) -> R:
-        """Execute all chained callables sequentially on the input payload."""
-        return reduce(lambda acc, f: f(acc), self._funcs, initial_value)  # type: ignore[return-value]
-
-
-def pulse_stream(items: Iterable[T], delay: float = 0.01) -> Generator[T, None, None]:
-    """Yield items from an iterable with a temporal pulse delay.
-
-    Args:
-        items: The collection of items to emit.
-        delay: Seconds to sleep between items.
-
-    Yields:
-        Individual elements from `items` spaced by `delay`.
-    """
-    for item in items:
-        time.sleep(delay)
-        yield item
-
-
-def retry_with_fallback(
-    retries: int = 3, fallback: Callable[..., Any] | None = None
-) -> Callable[[Callable[..., R]], Callable[..., R]]:
-    """Decorator for retrying a function upon failure, falling back if exhausted.
-
-    Args:
-        retries: Maximum number of execution attempts.
-        fallback: Optional callable invoked with exception if retries fail.
-
-    Returns:
-        Decorated function with automatic retry behavior.
-    """
-
-    def decorator(func: Callable[..., R]) -> Callable[..., R]:
+def network_retry(
+    exceptions: Sequence[Type[BaseException]] = (Exception,),
+    max_attempts: int = 5,
+    backoff_factor: float = 0.5,
+):
+    """Decorator applying fibonacci backoff with dynamic jitter for resilient network operations."""
+    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
         @wraps(func)
-        def wrapper(*args: Any, **kwargs: Any) -> R:
-            last_err: Exception | None = None
-            for _ in range(retries):
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            delays = _fibonacci_jitter_sequence(max_attempts, backoff_factor)
+            attempt = 1
+            for delay in delays:
                 try:
                     return func(*args, **kwargs)
-                except Exception as err:
-                    last_err = err
-            if fallback is not None and last_err is not None:
-                return fallback(last_err, *args, **kwargs)  # type: ignore[no-any-return]
-            if last_err:
-                raise last_err
-            raise RuntimeError("Execution failed without explicit exception")
-
+                except tuple(exceptions) as err:
+                    if attempt >= max_attempts:
+                        raise NetworkOperationError(
+                            f"Operation '{func.__name__}' failed after {max_attempts} attempts."
+                        ) from err
+                    time.sleep(delay)
+                    attempt += 1
+            return func(*args, **kwargs)
         return wrapper
-
     return decorator
