@@ -1,35 +1,38 @@
 import functools
-from typing import Any, Callable, Dict, List, Union
+from typing import Any, Callable, Dict, Optional
 
-def pipe(data: Any, *funcs: Callable) -> Any:
-    """a functional pipeline for data transformation."""
-    return functools.reduce(lambda v, f: f(v), funcs, data)
+def flexible_data_transformer(pipeline: list = None) -> Callable:
+    """Chainable data processing pipeline using closure factories."""
+    pipeline = pipeline or []
+    
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(data: Any, *args, **kwargs):
+            result = data
+            for step in pipeline:
+                result = step(result)
+            return func(result, *args, **kwargs)
+        return wrapper
+    return decorator
 
-def sanitize(data: Union[Dict, List]) -> Union[Dict, List]:
-    """deep recursive cleaning of empty values."""
-    if isinstance(data, dict):
-        return {k: sanitize(v) for k, v in data.items() if v is not None}
-    if isinstance(data, list):
-        return [sanitize(i) for i in data if i is not None]
-    return data
-
-def memoize_data(func: Callable) -> Callable:
-    """a decorator for caching process results."""
-    cache = {}
-    @functools.wraps(func)
-    def wrapper(*args):
-        key = str(args)
-        if key not in cache:
-            cache[key] = func(*args)
-        return cache[key]
-    return wrapper
-
-def flatten(data: List) -> List:
-    """a nested list unrolling sequence."""
-    result = []
-    for item in data:
-        if isinstance(item, list):
-            result.extend(flatten(item))
+def shallow_denest(data: Dict[str, Any], separator: str = '_') -> Dict[str, Any]:
+    """Flatten nested dictionaries into a single depth map."""
+    items = {}
+    for key, value in data.items():
+        if isinstance(value, dict):
+            for subkey, subvalue in shallow_denest(value, separator).items():
+                items[f"{key}{separator}{subkey}"] = subvalue
         else:
-            result.append(item)
-    return result
+            items[key] = value
+    return items
+
+class DataSanitizer:
+    def __init__(self, schema: Dict[str, type]):
+        self.schema = schema
+
+    def __call__(self, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Dynamic type casting and schema enforcement tool."""
+        return {
+            k: (v if isinstance(v, self.schema.get(k, object)) else self.schema.get(k, lambda x: x)(v))
+            for k, v in payload.items() if k in self.schema
+        }
