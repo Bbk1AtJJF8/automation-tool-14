@@ -1,46 +1,58 @@
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # automation-tool-14
 
-`automation-tool-14` is a lightweight, high-performance Python framework designed to streamline repetitive administrative tasks and workflow orchestration. It provides a robust command-line interface to manage multi-step processes with minimal configuration.
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+`automation-tool-14` is a lightweight Python engine designed to streamline local file operations, scheduled system tasks, and event-driven workflows. It provides a simple declarative interface to execute custom scripts, manage file watchers, and aggregate task execution metrics with minimal overhead.
 
 ## Features
 
-*   **Task Scheduling:** Execute complex Python scripts or system commands based on customizable cron-like intervals.
-*   **Centralized Logging:** Integrated logging module that captures task output and error states in a structured format for easy debugging.
-*   **Error Recovery:** Built-in retry logic with configurable backoff strategies to handle transient failures in network-dependent tasks.
-*   **Environment Agnostic:** Fully container-ready design that runs seamlessly on bare metal, virtual machines, or Docker environments.
+* **Declarative Workflows:** Define multi-step pipelines and conditional triggers using concise YAML configuration files.
+* **Real-time File Watchers:** Monitor directories for file creation, modification, or deletion to execute targeted actions immediately.
+* **Flexible Task Scheduler:** Execute background jobs on fixed intervals or custom cron schedules with built-in exponential backoff retries.
+* **Structured Output Logging:** Stream execution states, task outputs, and error diagnostics directly to stdout or structured JSON log files.
 
 ## Installation
 
-Ensure you have Python 3.9+ installed. You can install the tool via pip:
+Install directly from source using Python 3.9 or higher:
 
 ```bash
-# Clone the repository
 git clone https://github.com/Developer/automation-tool-14.git
 cd automation-tool-14
-
-# Install dependencies
 pip install -r requirements.txt
-
-# Run the installation script
-python setup.py install
+pip install -e .
 ```
 
 ## Basic Usage
 
-After installation, define your tasks in a `tasks.yaml` file and trigger the automation engine using the CLI:
+Create a workflow file named `workflow.yaml`:
 
-```bash
-# Execute tasks defined in your configuration file
-automation-tool-14 run --config tasks.yaml
-
-# Run a specific task by name with verbose logging
-automation-tool-14 run --task sync_backup --verbose
+```yaml
+name: File Processor
+trigger:
+  watch_directory: ./incoming
+  pattern: "*.csv"
+action:
+  run_script: scripts/process_data.py
 ```
 
-## Contributing
-We welcome contributions via Pull Requests. Please ensure all new code includes unit tests and follows PEP 8 styling guidelines.
+Execute the engine programmatically in Python:
+
+```python
+from automation_tool_14 import WorkflowEngine
+
+# Initialize the engine with your workflow configuration
+engine = WorkflowEngine(config_path="workflow.yaml")
+
+# Start listening for triggers and running tasks
+engine.start()
+```
+
+Or run via CLI:
+
+```bash
+automation-tool-14 run --config workflow.yaml
+```
 
 ## License
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+This project is licensed under the [MIT License](LICENSE).
