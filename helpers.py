@@ -1,70 +1,39 @@
-import functools
-import gc
-from typing import Any, Callable, Dict, List, Optional, Tuple
+import os
+import shutil
+from pathlib import Path
+from typing import Union, List
 
+class CleanupEngine:
+    def __init__(self, target_dir: str = './tmp'):
+        self.target = Path(target_dir)
 
-class HelperPipeline:
-    """Dynamic helper execution registry with automatic state cleanup."""
-
-    _registry: Dict[str, Callable] = {}
-    _transient_cache: Dict[str, Any] = {}
-
-    @classmethod
-    def register(cls, alias: Optional[str] = None):
-        def decorator(func: Callable) -> Callable:
-            name = alias or func.__name__
-
-            @functools.wraps(func)
-            def wrapper(*args, **kwargs):
-                result = func(*args, **kwargs)
-                cls._transient_cache[f"{name}_last"] = result
-                return result
-
-            cls._registry[name] = wrapper
-            return wrapper
-
-        return decorator
-
-    @classmethod
-    def purge_transients(cls) -> int:
-        """Reorganizes internal memory state by flushing transient cache."""
-        count = len(cls._transient_cache)
-        cls._transient_cache.clear()
-        gc.collect()
+    def purge_stale_artifacts(self, extension: str = '.log') -> int:
+        count = 0
+        if not self.target.exists():
+            return count
+        
+        for item in self.target.iterdir():
+            if item.is_file() and item.suffix == extension:
+                try:
+                    item.unlink()
+                    count += 1
+                except OSError:
+                    continue
         return count
 
-    @classmethod
-    def dispatch(cls, step_name: str, *args, **kwargs) -> Any:
-        if step_name not in cls._registry:
-            raise KeyError(f"Helper step '{step_name}' is not registered.")
-        return cls._registry[step_name](*args, **kwargs)
+    def consolidate_structure(self, sub_dirs: List[str]) -> None:
+        base = self.target.resolve()
+        for sub in sub_dirs:
+            path = base / sub
+            if path.is_dir():
+                for child in path.iterdir():
+                    target_path = base / child.name
+                    shutil.move(str(child), str(target_path))
+                path.rmdir()
 
-
-@HelperPipeline.register(alias="sanitize_text")
-def _sanitize(text: str) -> str:
-    return " ".join(text.strip().split())
-
-
-@HelperPipeline.register(alias="flatten_dict")
-def _flatten(
-    d: Dict[str, Any], parent_key: str = "", sep: str = "."
-) -> Dict[str, Any]:
-    items: List[Tuple[str, Any]] = []
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(_flatten(v, new_key, sep=sep).items())
-        else:
-            items.append((new_key, v))
-    return dict(items)
-
-
-def execute_sequence(data: Any, sequence: List[str]) -> Any:
-    """Executes a pipeline sequence and reorganizes memory state after."""
-    current = data
-    try:
-        for step in sequence:
-            current = HelperPipeline.dispatch(step, current)
-        return current
-    finally:
-        HelperPipeline.purge_transients()
+def get_directory_health(path: Union[str, Path]) -> dict:
+    root = Path(path)
+    return {
+        'files': sum(1 for f in root.rglob('*') if f.is_file()),
+        'size': sum(f.stat().st_size for f in root.rglob('*') if f.is_file())
+    }
