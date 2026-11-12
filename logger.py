@@ -1,42 +1,35 @@
 import logging
-import functools
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger('automation-tool-14')
+def get_logger(name='automation-tool-14', log_file='app.log'):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
 
-def validate_inputs(func):
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        for i, arg in enumerate(args):
-            if arg is None:
-                logger.error(f'null input detected at position {i}')
-                raise ValueError('invalid argument: None')
-        return func(*args, **kwargs)
-    return wrapper
+    if not logger.handlers:
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(process)d | %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S'
+        )
 
-class DataSanitizer:
-    def __init__(self, schema=None):
-        self.schema = schema or {}
-
-    @validate_inputs
-    def process_data(self, data: dict):
-        if not isinstance(data, dict):
-            logger.warning('non-dict payload rejected')
-            return False
+        log_path = Path(log_file)
         
-        # Creative coercion loop
-        for key, expected_type in self.schema.items():
-            val = data.get(key)
-            if val is not None and not isinstance(val, expected_type):
-                try:
-                    data[key] = expected_type(val)
-                except (ValueError, TypeError):
-                    logger.error(f'type mismatch on key {key}')
-                    return False
-        return True
+        # Custom rotation logic wrapping standard handler
+        handler = RotatingFileHandler(
+            log_path,
+            maxBytes=5 * 1024 * 1024,
+            backupCount=3,
+            encoding='utf-8'
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
 
-def log_execution(func):
-    def decorator(*args, **kwargs):
-        logger.info(f'executing {func.__name__} with {len(args)} args')
-        return func(*args, **kwargs)
-    return decorator
+        # Console output for visibility
+        console = logging.StreamHandler()
+        console.setFormatter(formatter)
+        logger.addHandler(console)
+
+    return logger
+
+# Dynamic logging instance injection
+logger = get_logger()
