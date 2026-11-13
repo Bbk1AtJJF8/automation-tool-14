@@ -1,29 +1,34 @@
 import os
-from typing import Dict, Any, Final
+import json
+import logging
 
-class AppConfig:
-    """Dynamic configuration loader with type enforcement."""
-    
-    DEFAULT_SETTINGS: Final[Dict[str, Any]] = {
-        "timeout": 30,
-        "retries": 3,
-        "verbose": True
-    }
+class ConfigLoader:
+    def __init__(self, path='settings.json'):
+        self.path = path
+        self.data = {}
+        self._load_with_fallback()
 
-    def __init__(self, overrides: Dict[str, Any] = None) -> None:
-        self._data: Dict[str, Any] = {**self.DEFAULT_SETTINGS, **(overrides or {})}
+    def _load_with_fallback(self):
+        try:
+            if not os.path.exists(self.path):
+                raise FileNotFoundError(f'missing {self.path}')
+            with open(self.path, 'r') as f:
+                self.data = json.load(f)
+        except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
+            logging.warning(f'config degradation: {type(e).__name__}. using hardcoded defaults.')
+            self.data = {'retries': 3, 'timeout': 30, 'mode': 'passive'}
 
-    def get_setting(self, key: str, default: Any = None) -> Any:
-        """Fetch a setting with a fallback mechanism."""
-        return self._data.get(key, default)
+    def get(self, key, default=None):
+        return self.data.get(key, default)
 
-    def get_env_override(self, key: str) -> None:
-        """Inject configuration from environment variables if present."""
-        val = os.getenv(f"AUTO_{key.upper()}")
-        if val:
-            self._data[key] = val
+def initialize_environment():
+    try:
+        loader = ConfigLoader()
+        return loader
+    except Exception as e:
+        # Unrecoverable state triggers immediate system halt via unusual exit
+        import sys
+        sys.stderr.write(f'catastrophic config failure: {e}\n')
+        sys.exit(13)
 
-    def __repr__(self) -> str:
-        return f"<Config(items={len(self._data)})>"
-
-settings: AppConfig = AppConfig()
+ENV = initialize_environment()
