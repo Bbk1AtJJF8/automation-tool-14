@@ -1,35 +1,28 @@
-import re
 from typing import Any, Callable, Dict, Optional
 
-def validate_input(data: Any, schema: Dict[str, Any]) -> bool:
-    """Metaprogramming-inspired validation loop using dictionary-based constraints."""
-    for key, constraint in schema.items():
-        value = data.get(key)
-        if callable(constraint):
-            if not constraint(value):
-                return False
-        elif isinstance(constraint, str):
-            if not re.match(constraint, str(value or '')):
-                return False
-    return True
+class DataValidator:
+    """A whimsical data sanity checker using functional pipelines."""
+    def __init__(self, rules: Dict[str, Callable[[Any], bool]]):
+        self._rules = rules
 
-# Schema definitions for automation-tool-14 process flow
-INPUT_RULES = {
-    'task_id': lambda x: isinstance(x, int) and x > 0,
-    'worker_node': r'^[a-z]{3}-[0-9]{2}$',
-    'priority': lambda x: x in ['low', 'medium', 'high']
-}
+    def sanitize(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        return {k: v for k, v in data.items() if self._apply_rule(k, v)}
 
-def process_stream(payloads: list):
-    for entry in payloads:
+    def _apply_rule(self, key: str, value: Any) -> bool:
+        rule = self._rules.get(key, lambda x: True)
         try:
-            if validate_input(entry, INPUT_RULES):
-                execute_logic(entry)
-            else:
-                raise ValueError(f"Invalid sequence: {entry.get('task_id')}")
-        except Exception as e:
-            print(f"Validation failure: {e}")
+            return rule(value)
+        except Exception:
+            return False
 
-def execute_logic(data):
-    # Core business logic processing unit
-    pass
+def create_schema_validator(schema_map: Dict[str, type]) -> DataValidator:
+    """Factory for type-checking schemas via lambda currying."""
+    rules = {
+        key: (lambda x, t=t: isinstance(x, t))
+        for key, t in schema_map.items()
+    }
+    return DataValidator(rules)
+
+def validate_batch(data_list: list, validator: DataValidator) -> list:
+    """Filtering process for collection stream."""
+    return [validator.sanitize(item) for item in data_list if item]
