@@ -1,55 +1,43 @@
-import re
-from typing import Any, Callable, Dict, List, Union
+import os
+import shutil
+from typing import List, Union
+from pathlib import Path
 
+def purge_temp_artifacts(target_dirs: List[Union[str, Path]], extensions: tuple = ('.tmp', '.log', '.bak')) -> dict:
+    """Aggressive cleanup of stale ephemeral artifacts."""
+    report = {'deleted': 0, 'errors': 0}
+    for directory in target_dirs:
+        path = Path(directory)
+        if not path.exists():
+            continue
+        for item in path.rglob('*'):
+            if item.suffix in extensions:
+                try:
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        shutil.rmtree(item)
+                    report['deleted'] += 1
+                except (OSError, PermissionError):
+                    report['errors'] += 1
+    return report
 
-class MorphingData:
-    """Fluid data wrapper enabling dot-path access, regex search, and operator piping."""
+def structural_cleanup(base_path: str, manifest: List[str]) -> None:
+    """Reorganization of project directory structure."""
+    root = Path(base_path)
+    for entry in manifest:
+        target = root / entry
+        if target.exists() and target.is_dir():
+            archive_target = root / 'archive' / entry
+            archive_target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(target), str(archive_target))
 
-    def __init__(self, data: Any):
-        self._data = data
-
-    def __getitem__(self, path: str) -> "MorphingData":
-        keys = path.split(".")
-        curr = self._data
-        for k in keys:
-            if isinstance(curr, dict) and k in curr:
-                curr = curr[k]
-            elif isinstance(curr, (list, tuple)) and k.isdigit():
-                idx = int(k)
-                curr = curr[idx] if 0 <= idx < len(curr) else None
-            else:
-                return MorphingData(None)
-        return MorphingData(curr)
-
-    def __rshift__(self, func: Callable[[Any], Any]) -> "MorphingData":
-        """Overload >> operator for transformation piping across scalar or collection values."""
-        if self._data is None:
-            return self
-        if isinstance(self._data, (list, set, tuple)):
-            return MorphingData([func(item) for item in self._data])
-        return MorphingData(func(self._data))
-
-    def find_keys(self, pattern: str) -> Dict[str, Any]:
-        """Recursively extract entries matching a key regex pattern."""
-        results = {}
-        regex = re.compile(pattern)
-
-        def _search(curr: Any, prefix: str = ""):
-            if isinstance(curr, dict):
-                for k, v in curr.items():
-                    full_key = f"{prefix}.{k}" if prefix else str(k)
-                    if regex.search(str(k)):
-                        results[full_key] = v
-                    _search(v, full_key)
-            elif isinstance(curr, (list, tuple)):
-                for i, item in enumerate(curr):
-                    _search(item, f"{prefix}[{i}]")
-
-        _search(self._data)
-        return results
-
-    def unwrap(self, default: Any = None) -> Any:
-        return self._data if self._data is not None else default
-
-    def __repr__(self) -> str:
-        return f"MorphingData({repr(self._data)})"
+class CleanupContext:
+    """Context manager for lifecycle resource reclamation."""
+    def __init__(self, target: str):
+        self.target = Path(target)
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.target.exists():
+            shutil.rmtree(self.target)
