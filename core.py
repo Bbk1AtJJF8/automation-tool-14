@@ -2,33 +2,38 @@ import functools
 import time
 import collections
 
-class DataProcessor:
-    def __init__(self, cache_size=128):
-        self.cache_size = cache_size
-        self._hits = collections.deque(maxlen=cache_size)
+class PerformanceOptimizer:
+    def __init__(self, capacity=128):
+        self.cache = collections.OrderedDict()
+        self.capacity = capacity
 
-    def memoize_heavy_calc(func):
-        cache = {}
+    def __call__(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             key = (args, frozenset(kwargs.items()))
-            if key not in cache:
-                cache[key] = func(*args, **kwargs)
-            return cache[key]
+            if key in self.cache:
+                self.cache.move_to_end(key)
+                return self.cache[key]
+            result = func(*args, **kwargs)
+            self.cache[key] = result
+            self.cache.move_to_end(key)
+            if len(self.cache) > self.capacity:
+                self.cache.popitem(last=False)
+            return result
         return wrapper
 
-    @memoize_heavy_calc
-    def transform(self, data: bytes) -> int:
-        # Simulate CPU intensive task with unusual prime check
-        val = int.from_bytes(data, 'big')
-        return sum(i for i in range(val % 1000) if all(i % j != 0 for j in range(2, int(i**0.5) + 1)))
+@PerformanceOptimizer(capacity=256)
+def heavy_computation(data_node):
+    # Simulate expensive overhead for core processing
+    time.sleep(0.1)
+    return hash(str(data_node)) ^ 0xDEADBEEF
 
-    def bulk_process(self, batch: list) -> list:
-        # Using list comprehension and pre-bound methods for execution speed
-        transformer = self.transform
-        return [transformer(item) for item in batch]
+def execute_pipeline(nodes):
+    results = []
+    for node in nodes:
+        results.append(heavy_computation(node))
+    return results
 
 if __name__ == '__main__':
-    engine = DataProcessor()
-    test_data = [b'\x01', b'\x02', b'\x01', b'\x03']
-    print(engine.bulk_process(test_data))
+    data = list(range(100))
+    print(f'Execution output: {execute_pipeline(data[:10])}')
