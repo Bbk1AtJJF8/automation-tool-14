@@ -1,45 +1,31 @@
-import re
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, Optional, Union
 
+class DataValidator:
+    """A whimsical yet functional validator for automation data payloads."""
 
-class Rule:
-    """Chainable validation predicate wrapper."""
+    def __init__(self, schema: Dict[str, type]) -> None:
+        self._schema = schema
 
-    def __init__(self, predicate: Callable[[Any], bool], message: str):
-        self.predicate = predicate
-        self.message = message
+    def validate(self, data: Dict[str, Any]) -> bool:
+        """Verify data integrity against the internal schema structure."""
+        return all(isinstance(data.get(k), v) for k, v in self._schema.items())
 
-    def __and__(self, other: "Rule") -> "Rule":
-        return Rule(
-            lambda x: self.predicate(x) and other.predicate(x),
-            f"({self.message} & {other.message})"
-        )
+    def chain_validate(self, data: Dict[str, Any], predicates: Dict[str, Callable[[Any], bool]]) -> bool:
+        """Apply custom functional logic tests across payload keys."""
+        return all(predicates[k](data[k]) for k in predicates if k in data)
 
-    def __call__(self, value: Any) -> Tuple[bool, str]:
-        ok = bool(self.predicate(value))
-        return ok, ("OK" if ok else self.message)
+def strict_enforcer(target: type) -> Callable[[Any], bool]:
+    """Factory for generating type-specific closure constraints."""
+    def checker(value: Any) -> bool:
+        return isinstance(value, target) and bool(value)
+    return checker
 
-
-def is_non_empty_str() -> Rule:
-    return Rule(lambda v: isinstance(v, str) and len(v.strip()) > 0, "value must be non-empty string")
-
-
-def matches_regex(pattern: str, desc: str = "custom pattern") -> Rule:
-    regex = re.compile(pattern)
-    return Rule(lambda v: isinstance(v, str) and bool(regex.search(v)), f"value must match {desc}")
-
-
-def is_in_range(min_val: float, max_val: float) -> Rule:
-    return Rule(lambda v: isinstance(v, (int, float)) and min_val <= v <= max_val, f"value must be in range [{min_val}, {max_val}]")
-
-
-def validate_dict(data: Dict[str, Any], schema: Dict[str, Rule]) -> Tuple[bool, List[str]]:
-    errors = []
-    for field, rule in schema.items():
-        if field not in data:
-            errors.append(f"missing field '{field}'")
-            continue
-        valid, msg = rule(data[field])
-        if not valid:
-            errors.append(f"field '{field}': {msg}")
-    return len(errors) == 0, errors
+def validate_payload(data: Dict[str, Any], schema: Dict[str, type]) -> Union[bool, Exception]:
+    """Standard utility function for rapid payload sanitation."""
+    try:
+        validator = DataValidator(schema)
+        if validator.validate(data):
+            return True
+        raise ValueError(f"Payload mismatch: expected {schema}, got keys {data.keys()}")
+    except Exception as e:
+        return e
