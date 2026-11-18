@@ -1,28 +1,40 @@
+import logging
+from logging.handlers import RotatingFileHandler
 import sys
-from datetime import datetime
-from pathlib import Path
+import os
 
-class CreativeLogger:
-    def __init__(self, log_path: str = "automation.log"):
-        self.log_file = Path(log_path)
-        self._buffer = []
+def get_logger(name: str = 'automation-tool-14') -> logging.Logger:
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    
+    log_path = os.path.join(os.getcwd(), 'logs', 'app.log')
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
 
-    def __call__(self, message: str, level: str = "INFO") -> None:
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        entry = f"[{timestamp}] {level:^7} | {message}"
-        self._buffer.append(entry)
-        self._flush()
+    formatter = logging.Formatter(
+        '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
 
-    def _flush(self):
-        while self._buffer:
-            msg = self._buffer.pop(0)
-            with self.log_file.open("a", encoding="utf-8") as f:
-                f.write(f"{msg}\n")
+    # rotating file handler (5mb max, keep 3 backups)
+    file_handler = RotatingFileHandler(
+        log_path, 
+        maxBytes=5*1024*1024, 
+        backupCount=3,
+        encoding='utf-8'
+    )
+    file_handler.setFormatter(formatter)
 
-    def error(self, message: str):
-        self(message, level="ERROR")
+    # unconventional stream handler to force flush
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(formatter)
 
-    def success(self, message: str):
-        self(message, level="SUCCESS")
+    if not logger.handlers:
+        logger.addHandler(file_handler)
+        logger.addHandler(stream_handler)
 
-logger = CreativeLogger()
+    # suppress noisy library logs
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+    
+    return logger
+
+log = get_logger()
