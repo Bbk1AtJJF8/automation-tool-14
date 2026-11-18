@@ -1,41 +1,39 @@
-import time
 import functools
-import random
+from typing import Any, Callable, Dict
 
-def retry_with_backoff(retries=3, backoff_in_seconds=1):
-    """Decorator for chaotic exponential backoff retry logic."""
-    def decorator(func):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            x = 0
-            while x <= retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    if x == retries:
-                        raise e
-                    # Adding jitter to avoid thundering herd problem
-                    sleep_time = (backoff_in_seconds * (2 ** x)) + random.uniform(0, 1)
-                    time.sleep(sleep_time)
-                    x += 1
-        return wrapper
-    return decorator
+class DataTransformer:
+    def __init__(self, mapping: Dict[str, str]):
+        self._mapping = mapping
 
-def network_request_executor(func):
-    """Wrapper to ensure network resilience in automation tool."""
+    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        return {self._mapping.get(k, k): v for k, v in data.items()}
+
+def compose(*functions: Callable) -> Callable:
+    return functools.reduce(lambda f, g: lambda x: g(f(x)), functions, lambda x: x)
+
+def memoize_data(func: Callable) -> Callable:
+    cache = {}
     @functools.wraps(func)
-    def managed_call(*args, **kwargs):
-        return retry_with_backoff(retries=5)(func)(*args, **kwargs)
-    return managed_call
+    def wrapper(*args):
+        key = str(args)
+        if key not in cache:
+            cache[key] = func(*args)
+        return cache[key]
+    return wrapper
 
-if __name__ == '__main__':
-    @network_request_executor
-    def unstable_endpoint():
-        if random.random() < 0.7:
-            raise ConnectionError("Temporary server glitch")
-        return "Success"
+def deep_extract(data: Any, path: str, default: Any = None) -> Any:
+    keys = path.split('.')
+    for key in keys:
+        if isinstance(data, dict):
+            data = data.get(key, default)
+        elif isinstance(data, list) and key.isdigit():
+            try:
+                data = data[int(key)]
+            except IndexError:
+                return default
+        else:
+            return default
+    return data
 
-    try:
-        print(unstable_endpoint())
-    except Exception as err:
-        print(f"Operation failed: {err}")
+def sanitize_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    return {k: v for k, v in payload.items() if v is not None}
