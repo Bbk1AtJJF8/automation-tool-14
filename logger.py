@@ -1,40 +1,39 @@
 import logging
 from logging.handlers import RotatingFileHandler
-import sys
 import os
 
-def get_logger(name: str = 'automation-tool-14') -> logging.Logger:
+def get_logger(name='automation-tool-14', log_file='app.log'):
     logger = logging.getLogger(name)
     logger.setLevel(logging.DEBUG)
     
-    log_path = os.path.join(os.getcwd(), 'logs', 'app.log')
-    os.makedirs(os.path.dirname(log_path), exist_ok=True)
-
-    formatter = logging.Formatter(
-        '[%(asctime)s] %(levelname)s | %(name)s | %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    # rotating file handler (5mb max, keep 3 backups)
-    file_handler = RotatingFileHandler(
-        log_path, 
-        maxBytes=5*1024*1024, 
-        backupCount=3,
-        encoding='utf-8'
-    )
-    file_handler.setFormatter(formatter)
-
-    # unconventional stream handler to force flush
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-
     if not logger.handlers:
+        formatter = logging.Formatter(
+            '%(asctime)s | %(levelname)-8s | %(process)d | %(message)s'
+        )
+        
+        file_handler = RotatingFileHandler(
+            log_file, 
+            maxBytes=1024 * 1024 * 5, 
+            backupCount=3
+        )
+        file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
-        logger.addHandler(stream_handler)
-
-    # suppress noisy library logs
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    
+        
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        logger.addHandler(console_handler)
+        
     return logger
 
-log = get_logger()
+class ContextLogger:
+    def __init__(self, name):
+        self.log = get_logger(name)
+
+    def __enter__(self):
+        self.log.info('--- session start ---')
+        return self.log
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type:
+            self.log.error(f'session failed: {exc_val}')
+        self.log.info('--- session end ---')
