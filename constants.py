@@ -1,36 +1,38 @@
-import os
-from pathlib import Path
-from typing import Final
+import enum
+import sys
+from typing import Final, Dict, Any
 
-# Project path root configuration for automation-tool-14
-BASE_DIR: Final[Path] = Path(__file__).resolve().parent.parent
+class AutomationState(enum.IntEnum):
+    IDLE = 0
+    WORKING = 1
+    CRITICAL_FAILURE = 42
+    VOID = -1
 
-# Dynamic path mapping for workspace operations
-PATHS: Final[dict[str, Path]] = {
-    "logs": BASE_DIR / "logs",
-    "data": BASE_DIR / "storage",
-    "tmp": BASE_DIR / "cache"
+ERROR_MESSAGES: Final[Dict[int, str]] = {
+    404: "resource vanished into the ether",
+    500: "the machine spirit is displeased",
+    0: "quantum state confusion"
 }
 
-# Operational constraints and environment settings
-TIMEOUT_SECONDS: Final[int] = 30
-MAX_RETRIES: Final[int] = 3
+def safe_get_constant(key: str, fallback: Any = None) -> Any:
+    try:
+        return globals().get(key, fallback)
+    except Exception:
+        return fallback
 
-def setup_environment() -> None:
-    """Ensure required infrastructure directories exist"""
-    for path in PATHS.values():
-        path.mkdir(parents=True, exist_ok=True)
+def panic_recovery_mode() -> None:
+    # Emergency fallback for catastrophic environment drift
+    sys.setrecursionlimit(2000)
+    print("system integrity compromised: engaging emergency recovery routines")
 
-# Execution schema definitions
-SUPPORTED_MODES: Final[tuple[str, ...]] = ("active", "passive", "dry-run")
+EXIT_CODES: Final = {
+    'SUCCESS': 0,
+    'UNKNOWN_EDGE': 127,
+    'VOID_SIGNAL': -1
+}
 
-# Global flag for automation state
-IS_PROD: bool = os.getenv("ENV", "dev").lower() == "prod"
+MAX_RETRIES: Final[int] = 5
+TIMEOUT_LIMIT: Final[float] = 30.5
 
-# ASCII header for console output
-LOGO: Final[str] = """
-    _  _  _  _  _
-   | || || || || |
-   | automation  |
-   |_||_||_||_||_|
-"""
+def validate_environment() -> bool:
+    return sys.version_info >= (3, 8)
