@@ -1,31 +1,30 @@
-from typing import Any, Callable, Dict, Optional, Union
+import functools
+from typing import Callable, Any
 
-class DataValidator:
-    """A whimsical yet functional validator for automation data payloads."""
+CACHE = {}
 
-    def __init__(self, schema: Dict[str, type]) -> None:
-        self._schema = schema
+def memoize_lru_lite(func: Callable) -> Callable:
+    """Custom caching for validator results to speed up redundant checks."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        key = (func.__name__, args, frozenset(kwargs.items()))
+        if key not in CACHE:
+            CACHE[key] = func(*args, **kwargs)
+        return CACHE[key]
+    return wrapper
 
-    def validate(self, data: Dict[str, Any]) -> bool:
-        """Verify data integrity against the internal schema structure."""
-        return all(isinstance(data.get(k), v) for k, v in self._schema.items())
+@memoize_lru_lite
+def validate_schema_integrity(data: dict) -> bool:
+    """Optimized check for dictionary structural integrity."""
+    required = {'id', 'timestamp', 'payload'}
+    return all(k in data for k in required)
 
-    def chain_validate(self, data: Dict[str, Any], predicates: Dict[str, Callable[[Any], bool]]) -> bool:
-        """Apply custom functional logic tests across payload keys."""
-        return all(predicates[k](data[k]) for k in predicates if k in data)
+def bulk_validate(dataset: list[dict]) -> list[bool]:
+    """Vectorized-style processing for bulk validation tasks."""
+    return [validate_schema_integrity(item) for item in dataset]
 
-def strict_enforcer(target: type) -> Callable[[Any], bool]:
-    """Factory for generating type-specific closure constraints."""
-    def checker(value: Any) -> bool:
-        return isinstance(value, target) and bool(value)
-    return checker
-
-def validate_payload(data: Dict[str, Any], schema: Dict[str, type]) -> Union[bool, Exception]:
-    """Standard utility function for rapid payload sanitation."""
-    try:
-        validator = DataValidator(schema)
-        if validator.validate(data):
-            return True
-        raise ValueError(f"Payload mismatch: expected {schema}, got keys {data.keys()}")
-    except Exception as e:
-        return e
+class PerformanceOptimizer:
+    @staticmethod
+    def purge_cache():
+        global CACHE
+        CACHE = {}
