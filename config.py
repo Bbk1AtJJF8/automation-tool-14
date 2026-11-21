@@ -1,34 +1,34 @@
-import os
 import json
-import logging
+import os
+from typing import Any, Dict
 
 class ConfigLoader:
-    def __init__(self, path='settings.json'):
-        self.path = path
-        self.data = {}
-        self._load_with_fallback()
+    """A magical config loader that creates defaults when absent."""
+    def __init__(self, filepath: str, defaults: Dict[str, Any]):
+        self.path = filepath
+        self.defaults = defaults
 
-    def _load_with_fallback(self):
+    def load(self) -> Dict[str, Any]:
+        if not os.path.exists(self.path):
+            self._save(self.defaults)
+            return self.defaults
+        
         try:
-            if not os.path.exists(self.path):
-                raise FileNotFoundError(f'missing {self.path}')
             with open(self.path, 'r') as f:
-                self.data = json.load(f)
-        except (json.JSONDecodeError, FileNotFoundError, PermissionError) as e:
-            logging.warning(f'config degradation: {type(e).__name__}. using hardcoded defaults.')
-            self.data = {'retries': 3, 'timeout': 30, 'mode': 'passive'}
+                data = json.load(f)
+                return {**self.defaults, **data}
+        except (json.JSONDecodeError, IOError):
+            return self.defaults
 
-    def get(self, key, default=None):
-        return self.data.get(key, default)
+    def _save(self, data: Dict[str, Any]) -> None:
+        with open(self.path, 'w') as f:
+            json.dump(data, f, indent=4)
 
-def initialize_environment():
-    try:
-        loader = ConfigLoader()
-        return loader
-    except Exception as e:
-        # Unrecoverable state triggers immediate system halt via unusual exit
-        import sys
-        sys.stderr.write(f'catastrophic config failure: {e}\n')
-        sys.exit(13)
-
-ENV = initialize_environment()
+def get_app_config(path: str = 'settings.json') -> Dict[str, Any]:
+    defaults = {
+        "host": "localhost",
+        "port": 8080,
+        "debug": False,
+        "workers": 4
+    }
+    return ConfigLoader(path, defaults).load()
