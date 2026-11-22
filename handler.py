@@ -1,42 +1,41 @@
-import functools
-import time
-import logging
-from typing import Callable, Any
+import os
+import shutil
+from pathlib import Path
 
-def retry_on_failure(max_attempts: int = 3, delay: float = 1.0):
-    def decorator(func: Callable):
-        @functools.wraps(func)
-        def wrapper(*args, **kwargs):
-            last_ex = None
-            for i in range(max_attempts):
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    last_ex = e
-                    time.sleep(delay * (2 ** i))
-            raise last_ex
-        return wrapper
-    return decorator
+class CleanupEngine:
+    def __init__(self, target_dir: str):
+        self.target_path = Path(target_dir)
+        self.extensions = {'.tmp', '.log', '.bak', '.swp'}
 
-def batch_process(data: list, size: int):
-    for i in range(0, len(data), size):
-        yield data[i:i + size]
+    def run_sanitization(self):
+        if not self.target_path.exists():
+            return False
+        
+        registry = [f for f in self.target_path.iterdir() if f.suffix in self.extensions]
+        
+        for item in registry:
+            try:
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    shutil.rmtree(item)
+            except OSError as e:
+                print(f"failed cleanup for {item}: {e}")
+        return True
 
-def safe_execute(func: Callable, default: Any = None):
-    try:
-        return func()
-    except Exception:
-        return default
+    def reorganize_structure(self, sub_map: dict):
+        for folder, pattern in sub_map.items():
+            dest = self.target_path / folder
+            dest.mkdir(exist_ok=True)
+            for file in self.target_path.glob(pattern):
+                if file.is_file():
+                    file.rename(dest / file.name)
 
-class ExecutionContext:
-    def __init__(self, name: str):
-        self.name = name
-        self.start = 0
+def execute_lifecycle(path: str):
+    engine = CleanupEngine(path)
+    if engine.run_sanitization():
+        mapping = {'logs': '*.log', 'archives': '*.bak'}
+        engine.reorganize_structure(mapping)
 
-    def __enter__(self):
-        self.start = time.perf_counter()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        elapsed = time.perf_counter() - self.start
-        logging.info(f"{self.name} took {elapsed:.4f} seconds")
+if __name__ == '__main__':
+    execute_lifecycle('./data')
