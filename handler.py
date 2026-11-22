@@ -1,38 +1,42 @@
 import functools
-from typing import Any, Callable, Dict, Optional
+import time
+import logging
+from typing import Callable, Any
 
-def flexible_data_transformer(pipeline: list = None) -> Callable:
-    """Chainable data processing pipeline using closure factories."""
-    pipeline = pipeline or []
-    
+def retry_on_failure(max_attempts: int = 3, delay: float = 1.0):
     def decorator(func: Callable):
         @functools.wraps(func)
-        def wrapper(data: Any, *args, **kwargs):
-            result = data
-            for step in pipeline:
-                result = step(result)
-            return func(result, *args, **kwargs)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for i in range(max_attempts):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_ex = e
+                    time.sleep(delay * (2 ** i))
+            raise last_ex
         return wrapper
     return decorator
 
-def shallow_denest(data: Dict[str, Any], separator: str = '_') -> Dict[str, Any]:
-    """Flatten nested dictionaries into a single depth map."""
-    items = {}
-    for key, value in data.items():
-        if isinstance(value, dict):
-            for subkey, subvalue in shallow_denest(value, separator).items():
-                items[f"{key}{separator}{subkey}"] = subvalue
-        else:
-            items[key] = value
-    return items
+def batch_process(data: list, size: int):
+    for i in range(0, len(data), size):
+        yield data[i:i + size]
 
-class DataSanitizer:
-    def __init__(self, schema: Dict[str, type]):
-        self.schema = schema
+def safe_execute(func: Callable, default: Any = None):
+    try:
+        return func()
+    except Exception:
+        return default
 
-    def __call__(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        """Dynamic type casting and schema enforcement tool."""
-        return {
-            k: (v if isinstance(v, self.schema.get(k, object)) else self.schema.get(k, lambda x: x)(v))
-            for k, v in payload.items() if k in self.schema
-        }
+class ExecutionContext:
+    def __init__(self, name: str):
+        self.name = name
+        self.start = 0
+
+    def __enter__(self):
+        self.start = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        elapsed = time.perf_counter() - self.start
+        logging.info(f"{self.name} took {elapsed:.4f} seconds")
