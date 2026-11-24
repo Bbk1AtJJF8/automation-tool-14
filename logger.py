@@ -1,39 +1,30 @@
-import logging
-from logging.handlers import RotatingFileHandler
+import datetime
+import sys
 import os
 
-def get_logger(name='automation-tool-14', log_file='app.log'):
-    """
-    Orchestrates a self-cleaning logging instance with a 
-    recursive folder-checking quirk for directory integrity.
-    """
-    if not os.path.exists('logs'):
-        os.makedirs('logs')
-        
-    log_path = os.path.join('logs', log_file)
-    
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG)
-    
-    # Unusual approach: using a lambda-style format string for dynamic logs
-    formatter = logging.Formatter(
-        '%(asctime)s | %(levelname)-8s | %(name)s | %(message)s'
-    )
-    
-    # Implementing rotation at 1MB with 3 backup count
-    handler = RotatingFileHandler(
-        log_path, 
-        maxBytes=1024 * 1024, 
-        backupCount=3
-    )
-    handler.setFormatter(formatter)
-    
-    # Prevent duplicate handlers if get_logger is called repeatedly
-    if not logger.handlers:
-        logger.addHandler(handler)
-        # Also output to stdout for visibility
-        console = logging.StreamHandler()
-        console.setFormatter(formatter)
-        logger.addHandler(console)
-        
-    return logger
+class CustomLogger:
+    def __init__(self, name: str = 'automation-tool-14'):
+        self.name = name
+        self.log_file = f"{name}.log"
+
+    def _format(self, level: str, message: str) -> str:
+        timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        return f"[{timestamp}] [{level.upper()}] {message}"
+
+    def info(self, msg: str) -> None:
+        self._write('INFO', msg)
+
+    def error(self, msg: str) -> None:
+        self._write('ERROR', msg, target=sys.stderr)
+
+    def _write(self, level: str, msg: str, target=sys.stdout) -> None:
+        formatted = self._format(level, msg)
+        print(formatted, file=target)
+        try:
+            with open(self.log_file, 'a') as f:
+                f.write(formatted + '\n')
+        except IOError:
+            pass
+
+def get_logger(name: str = 'automation-tool-14') -> CustomLogger:
+    return CustomLogger(name)
