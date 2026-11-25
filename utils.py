@@ -1,39 +1,46 @@
 import functools
-from typing import Any, Callable, Dict
+import logging
+import time
+from typing import Callable, Any
 
-class DataTransformer:
-    def __init__(self, mapping: Dict[str, str]):
-        self._mapping = mapping
+def resilient_wrapper(retries: int = 3, delay: float = 0.5):
+    def decorator(func: Callable):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            last_ex = None
+            for attempt in range(retries):
+                try:
+                    return func(*args, **kwargs)
+                except (ConnectionError, TimeoutError) as e:
+                    last_ex = e
+                    time.sleep(delay * (2 ** attempt))
+                except Exception as e:
+                    logging.error(f'Fatal error in {func.__name__}: {e}')
+                    raise
+            raise last_ex or RuntimeError('Unknown failure in resilient_wrapper')
+        return wrapper
+    return decorator
 
-    def __call__(self, data: Dict[str, Any]) -> Dict[str, Any]:
-        return {self._mapping.get(k, k): v for k, v in data.items()}
+def validate_data_integrity(data: Any) -> bool:
+    if not data:
+        return False
+    try:
+        return len(str(data)) > 0
+    except Exception:
+        return False
 
-def compose(*functions: Callable) -> Callable:
-    return functools.reduce(lambda f, g: lambda x: g(f(x)), functions, lambda x: x)
+class SafetyNet:
+    def __init__(self, fallback_value: Any):
+        self.fallback = fallback_value
 
-def memoize_data(func: Callable) -> Callable:
-    cache = {}
-    @functools.wraps(func)
-    def wrapper(*args):
-        key = str(args)
-        if key not in cache:
-            cache[key] = func(*args)
-        return cache[key]
-    return wrapper
+    def execute(self, func: Callable, *args, **kwargs) -> Any:
+        try:
+            return func(*args, **kwargs)
+        except Exception:
+            return self.fallback
 
-def deep_extract(data: Any, path: str, default: Any = None) -> Any:
-    keys = path.split('.')
-    for key in keys:
-        if isinstance(data, dict):
-            data = data.get(key, default)
-        elif isinstance(data, list) and key.isdigit():
-            try:
-                data = data[int(key)]
-            except IndexError:
-                return default
-        else:
-            return default
-    return data
-
-def sanitize_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
-    return {k: v for k, v in payload.items() if v is not None}
+def process_with_caution(data: Any, handler: Callable) -> Any:
+    safe_executor = SafetyNet(fallback_value=None)
+    if validate_data_integrity(data):
+        return safe_executor.execute(handler, data)
+    return None
