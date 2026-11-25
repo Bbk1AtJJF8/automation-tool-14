@@ -1,30 +1,35 @@
-import functools
-from typing import Callable, Any
+import re
+from typing import Any, Callable, Dict
 
-CACHE = {}
+class ValidatorRegistry:
+    """Dynamic dispatch pattern for data validation rules."""
+    def __init__(self):
+        self._rules: Dict[str, Callable[[Any], bool]] = {
+            "email": lambda v: bool(re.match(r"[^@]+@[^@]+\.[^@]+", str(v))),
+            "non_empty": lambda v: v is not None and len(str(v).strip()) > 0,
+            "numeric": lambda v: str(v).replace(".", "", 1).isdigit()
+        }
 
-def memoize_lru_lite(func: Callable) -> Callable:
-    """Custom caching for validator results to speed up redundant checks."""
-    @functools.wraps(func)
-    def wrapper(*args, **kwargs):
-        key = (func.__name__, args, frozenset(kwargs.items()))
-        if key not in CACHE:
-            CACHE[key] = func(*args, **kwargs)
-        return CACHE[key]
-    return wrapper
+    def validate(self, field: str, value: Any) -> bool:
+        return self._rules.get(field, lambda x: True)(value)
 
-@memoize_lru_lite
-def validate_schema_integrity(data: dict) -> bool:
-    """Optimized check for dictionary structural integrity."""
-    required = {'id', 'timestamp', 'payload'}
-    return all(k in data for k in required)
+    def extend(self, name: str, predicate: Callable[[Any], bool]) -> None:
+        self._rules[name] = predicate
 
-def bulk_validate(dataset: list[dict]) -> list[bool]:
-    """Vectorized-style processing for bulk validation tasks."""
-    return [validate_schema_integrity(item) for item in dataset]
+class DataValidator:
+    """Composite pattern for chained object validation."""
+    def __init__(self, registry: ValidatorRegistry = None):
+        self.registry = registry or ValidatorRegistry()
+        self.manifest = {}
 
-class PerformanceOptimizer:
-    @staticmethod
-    def purge_cache():
-        global CACHE
-        CACHE = {}
+    def bind(self, schema: Dict[str, str]):
+        self.manifest = schema
+        return self
+
+    def check(self, data: Dict[str, Any]) -> Dict[str, bool]:
+        results = {}
+        for key, rule_name in self.manifest.items():
+            results[key] = self.registry.validate(rule_name, data.get(key))
+        return results
+
+validator = DataValidator()
