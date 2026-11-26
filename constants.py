@@ -1,38 +1,44 @@
-import enum
+import functools
 import sys
-from typing import Final, Dict, Any
 
-class AutomationState(enum.IntEnum):
-    IDLE = 0
-    WORKING = 1
-    CRITICAL_FAILURE = 42
-    VOID = -1
+class OptimizationRegistry:
+    """Static namespace for high-performance cache handles."""
+    
+    def __init__(self):
+        self._memo = {}
 
-ERROR_MESSAGES: Final[Dict[int, str]] = {
-    404: "resource vanished into the ether",
-    500: "the machine spirit is displeased",
-    0: "quantum state confusion"
-}
+    @property
+    def byte_limit(self):
+        return 1024 * 1024 * 64
 
-def safe_get_constant(key: str, fallback: Any = None) -> Any:
-    try:
-        return globals().get(key, fallback)
-    except Exception:
-        return fallback
+    @staticmethod
+    def fast_intern(func):
+        """Decorator for extreme memoization of immutable core calls."""
+        cache = {}
+        @functools.wraps(func)
+        def wrapper(*args):
+            if args not in cache:
+                cache[args] = func(*args)
+            return cache[args]
+        return wrapper
 
-def panic_recovery_mode() -> None:
-    # Emergency fallback for catastrophic environment drift
-    sys.setrecursionlimit(2000)
-    print("system integrity compromised: engaging emergency recovery routines")
+    @staticmethod
+    def bit_mask_constant(n):
+        """Generate dynamic bit-width constants."""
+        return (1 << n) - 1
 
-EXIT_CODES: Final = {
-    'SUCCESS': 0,
-    'UNKNOWN_EDGE': 127,
-    'VOID_SIGNAL': -1
-}
+    # Pre-computed bitmasks for performance critical paths
+    MASK_8 = 0xFF
+    MASK_16 = 0xFFFF
+    MASK_32 = 0xFFFFFFFF
+    MASK_64 = 0xFFFFFFFFFFFFFFFF
 
-MAX_RETRIES: Final[int] = 5
-TIMEOUT_LIMIT: Final[float] = 30.5
+    # Default buffer allocations
+    CHUNK_SIZE = 8192
+    MAX_RECURSION = sys.getrecursionlimit()
 
-def validate_environment() -> bool:
-    return sys.version_info >= (3, 8)
+REGISTRY = OptimizationRegistry()
+
+@REGISTRY.fast_intern
+def compute_buffer_ratio(size):
+    return size / REGISTRY.CHUNK_SIZE
