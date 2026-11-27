@@ -1,43 +1,44 @@
-import os
-import shutil
-from typing import List, Union
-from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+import functools
+import time
 
-def purge_temp_artifacts(target_dirs: List[Union[str, Path]], extensions: tuple = ('.tmp', '.log', '.bak')) -> dict:
-    """Aggressive cleanup of stale ephemeral artifacts."""
-    report = {'deleted': 0, 'errors': 0}
-    for directory in target_dirs:
-        path = Path(directory)
-        if not path.exists():
-            continue
-        for item in path.rglob('*'):
-            if item.suffix in extensions:
+def compose(*functions: Callable[[Any], Any]) -> Callable[[Any], Any]:
+    """Chain functions together for functional flow."""
+    return functools.reduce(lambda f, g: lambda x: g(f(x)), functions)
+
+def retry_operation(attempts: int = 3, delay: float = 0.5) -> Callable[[Callable], Callable]:
+    """Decorator for retrying operations with delay."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            last_err: Optional[Exception] = None
+            for _ in range(attempts):
                 try:
-                    if item.is_file():
-                        item.unlink()
-                    elif item.is_dir():
-                        shutil.rmtree(item)
-                    report['deleted'] += 1
-                except (OSError, PermissionError):
-                    report['errors'] += 1
-    return report
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    last_err = e
+                    time.sleep(delay)
+            raise last_err if last_err else Exception("unknown failure")
+        return wrapper
+    return decorator
 
-def structural_cleanup(base_path: str, manifest: List[str]) -> None:
-    """Reorganization of project directory structure."""
-    root = Path(base_path)
-    for entry in manifest:
-        target = root / entry
-        if target.exists() and target.is_dir():
-            archive_target = root / 'archive' / entry
-            archive_target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.move(str(target), str(archive_target))
+def extract_nested(data: Dict[str, Any], keys: List[str]) -> Any:
+    """Navigates nested dictionary structures via key list."""
+    return functools.reduce(lambda d, k: d.get(k, {}) if isinstance(d, dict) else None, keys, data)
 
-class CleanupContext:
-    """Context manager for lifecycle resource reclamation."""
-    def __init__(self, target: str):
-        self.target = Path(target)
-    def __enter__(self):
-        return self
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        if self.target.exists():
-            shutil.rmtree(self.target)
+def memoize_with_expiry(ttl: int) -> Callable[[Callable], Callable]:
+    """Time-based memoization for function results."""
+    cache: Dict[str, tuple] = {}
+
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args: Any) -> Any:
+            now = time.time()
+            key = str(args)
+            if key in cache and now - cache[key][1] < ttl:
+                return cache[key][0]
+            result = func(*args)
+            cache[key] = (result, now)
+            return result
+        return wrapper
+    return decorator
